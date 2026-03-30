@@ -65,7 +65,10 @@ func main() {
 	}
 
 	// Start HTTP/WebSocket server
-	server := claused.NewServer(anthropic, router, logger)
+	server := claused.NewServer(anthropic, router, mcpManager, logger)
+
+	// Build tool definitions from connected MCP servers
+	server.BuildTools()
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 
 	logger.Info("AxiOS claused starting",

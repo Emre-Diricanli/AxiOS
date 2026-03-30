@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 const anthropicAPIURL = "https://api.anthropic.com/v1/messages"
@@ -111,22 +112,38 @@ func (c *AnthropicClient) StreamMessage(system string, messages []Message, tools
 }
 
 // ParseSSEStream reads server-sent events from a streaming response.
+// Anthropic SSE format: "event: <type>\ndata: <json>\n\n"
 func ParseSSEStream(reader io.Reader, onEvent func(eventType string, data []byte)) error {
 	scanner := bufio.NewScanner(reader)
+	var currentEvent string
 	for scanner.Scan() {
 		line := scanner.Text()
 
 		if len(line) == 0 {
+			currentEvent = ""
 			continue
 		}
 
-		if bytes.HasPrefix([]byte(line), []byte("data: ")) {
+		if strings.HasPrefix(line, "event: ") {
+			currentEvent = line[7:]
+			continue
+		}
+
+		if strings.HasPrefix(line, "data: ") {
 			data := []byte(line[6:])
-			var event struct {
-				Type string `json:"type"`
+			// Use the event type from the "event:" line if available,
+			// otherwise fall back to the "type" field in the JSON
+			eventType := currentEvent
+			if eventType == "" {
+				var parsed struct {
+					Type string `json:"type"`
+				}
+				if err := json.Unmarshal(data, &parsed); err == nil {
+					eventType = parsed.Type
+				}
 			}
-			if err := json.Unmarshal(data, &event); err == nil {
-				onEvent(event.Type, data)
+			if eventType != "" {
+				onEvent(eventType, data)
 			}
 		}
 	}

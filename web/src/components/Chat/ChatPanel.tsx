@@ -1,14 +1,16 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { MessageBubble } from "./MessageBubble";
+import { ToolBlock } from "./ToolBlock";
 import { InputBar } from "./InputBar";
 import type { ChatMessage } from "@/types/messages";
 
 interface DisplayMessage {
   id: string;
-  role: "user" | "assistant" | "error";
+  role: "user" | "assistant" | "error" | "tool_use" | "tool_result";
   content: string;
   model?: string;
+  toolName?: string;
 }
 
 const SESSION_ID = "default";
@@ -40,11 +42,51 @@ export function ChatPanel() {
           },
         ];
       });
+    } else if (msg.type === "tool_use") {
+      // Finalize any in-progress assistant message before showing tool
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.id === "streaming") {
+          updated[updated.length - 1] = { ...last, id: crypto.randomUUID() };
+        }
+        updated.push({
+          id: crypto.randomUUID(),
+          role: "tool_use",
+          content: msg.content,
+          toolName: msg.toolName,
+        });
+        return updated;
+      });
+      streamBufferRef.current = "";
+    } else if (msg.type === "tool_result") {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "tool_result",
+          content: msg.content,
+          toolName: msg.toolName,
+        },
+      ]);
     } else if (msg.type === "error") {
       setMessages((prev) => [
         ...prev,
         { id: crypto.randomUUID(), role: "error", content: msg.content },
       ]);
+      setStreaming(false);
+    } else if (msg.type === "status" && msg.content === "done") {
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.id === "streaming") {
+          return [
+            ...prev.slice(0, -1),
+            { ...last, id: crypto.randomUUID() },
+          ];
+        }
+        return prev;
+      });
+      streamBufferRef.current = "";
       setStreaming(false);
     }
   }, []);
@@ -96,21 +138,33 @@ export function ChatPanel() {
           <div className="flex items-center justify-center h-full text-neutral-600">
             <div className="text-center">
               <h2 className="text-2xl font-bold text-neutral-300 mb-2">
-                AxiOS
+                Axi<span className="text-blue-500">OS</span>
               </h2>
               <p>Your AI-native operating system is ready.</p>
               <p className="mt-1">Ask me anything about your system.</p>
             </div>
           </div>
         )}
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            role={msg.role}
-            content={msg.content}
-            model={msg.model}
-          />
-        ))}
+        {messages.map((msg) => {
+          if (msg.role === "tool_use" || msg.role === "tool_result") {
+            return (
+              <ToolBlock
+                key={msg.id}
+                type={msg.role}
+                toolName={msg.toolName ?? "unknown"}
+                content={msg.content}
+              />
+            );
+          }
+          return (
+            <MessageBubble
+              key={msg.id}
+              role={msg.role}
+              content={msg.content}
+              model={msg.model}
+            />
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 

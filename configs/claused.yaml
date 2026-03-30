@@ -24,10 +24,14 @@ routing:
   mode: "auto"  # auto, cloud_only, local_only, cost_aware
 
 mcp:
-  socket_dir: "/run/axios/mcp"
-  servers: []
-  # servers:
-  #   - axios-fs
+  socket_dir: "/tmp/axios-mcp"
+  servers:
+    - axios-fs
+    - axios-system
+  # Future servers:
   #   - axios-docker
   #   - axios-gpu
-  #   - axios-system
+  #   - axios-media
+  #   - axios-network
+  #   - axios-git
+  #   - axios-ollama

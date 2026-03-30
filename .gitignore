@@ -1,5 +1,8 @@
 # Go
 /bin/
+/axios-fs
+/axios-system
+/claused
 *.exe
 *.exe~
 *.dll
