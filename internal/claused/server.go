@@ -100,6 +100,11 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	// System stats endpoint (gathered directly, no MCP)
 	mux.HandleFunc("/api/system/stats", s.handleSystemStats)
 
+	// Model management
+	mux.HandleFunc("/api/models", s.handleListModels)
+	mux.HandleFunc("/api/models/current", s.handleCurrentModel)
+	mux.HandleFunc("/api/models/switch", s.handleSwitchModel)
+
 	// Filesystem REST endpoints (call axios-fs MCP server directly)
 	mux.HandleFunc("/api/fs/list", s.handleFSList)
 	mux.HandleFunc("/api/fs/read", s.handleFSRead)
@@ -113,12 +118,109 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	status := map[string]any{
+		"backend": string(s.router.Route()),
+		"routing": string(s.router.mode),
+	}
+	if s.anthropic != nil {
+		status["authType"] = string(s.anthropic.authType)
+		status["cloudModel"] = s.anthropic.model
+	}
+	if s.ollama != nil {
+		status["localModel"] = s.ollama.model
+	}
+	json.NewEncoder(w).Encode(status)
+}
+
+func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	type modelInfo struct {
+		Name     string `json:"name"`
+		Backend  string `json:"backend"` // "cloud" or "local"
+		Active   bool   `json:"active"`
+	}
+
+	var models []modelInfo
+
+	// Cloud models
+	if s.anthropic != nil {
+		active := s.router.Route() == BackendCloud
+		models = append(models, modelInfo{Name: s.anthropic.model, Backend: "cloud", Active: active})
+	}
+
+	// Local models from Ollama
+	if s.ollama != nil {
+		ollamaModels, err := s.ollama.ListModels()
+		if err == nil {
+			activeLocal := s.router.Route() == BackendLocal
+			for _, m := range ollamaModels {
+				models = append(models, modelInfo{
+					Name:    m,
+					Backend: "local",
+					Active:  activeLocal && m == s.ollama.model,
+				})
+			}
+		}
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{"models": models})
+}
+
+func (s *Server) handleCurrentModel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	backend := s.router.Route()
+	model := ""
+	if backend == BackendCloud && s.anthropic != nil {
+		model = s.anthropic.model
+	} else if backend == BackendLocal && s.ollama != nil {
+		model = s.ollama.model
+	}
 	json.NewEncoder(w).Encode(map[string]any{
-		"backend":  string(s.router.Route()),
-		"routing":  string(s.router.mode),
-		"authType": string(s.anthropic.authType),
-		"model":    s.anthropic.model,
+		"model":   model,
+		"backend": string(backend),
 	})
+}
+
+func (s *Server) handleSwitchModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Model   string `json:"model"`
+		Backend string `json:"backend"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	switch req.Backend {
+	case "cloud":
+		if s.anthropic == nil {
+			s.jsonError(w, "no cloud credentials configured", http.StatusBadRequest)
+			return
+		}
+		s.anthropic.model = req.Model
+		s.router.mode = RouteCloudOnly
+		s.logger.Info("switched to cloud model", "model", req.Model)
+	case "local":
+		if s.ollama == nil {
+			s.jsonError(w, "Ollama not available", http.StatusBadRequest)
+			return
+		}
+		s.ollama.model = req.Model
+		s.router.mode = RouteLocalOnly
+		s.logger.Info("switched to local model", "model", req.Model)
+	default:
+		s.jsonError(w, "backend must be 'cloud' or 'local'", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "model": req.Model, "backend": req.Backend})
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, useEffect, lazy, Suspense } from "react";
 import { ChatPanel } from "@/components/Chat/ChatPanel";
 import { FileExplorer } from "@/components/Files/FileExplorer";
+import { ModelPicker } from "./ModelPicker";
 
 const Terminal = lazy(() => import("@/components/Terminal/Terminal"));
 const SystemDashboard = lazy(() =>
@@ -195,7 +196,8 @@ export function Shell() {
                 {activeTab === "kubernetes" && "Container orchestration"}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <ModelPicker />
               <div className="glass rounded-full px-3 py-1.5 flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
                 <span className="text-[10px] font-mono text-muted-foreground">AxiOS v0.1</span>

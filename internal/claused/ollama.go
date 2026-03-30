@@ -238,6 +238,30 @@ func ParseOllamaStream(reader io.Reader, onChunk func(text string, done bool)) e
 	return scanner.Err()
 }
 
+// ListModels returns the names of all locally available models.
+func (c *OllamaClient) ListModels() ([]string, error) {
+	resp, err := c.httpClient.Get(c.baseURL + "/api/tags")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	var names []string
+	for _, m := range result.Models {
+		names = append(names, m.Name)
+	}
+	return names, nil
+}
+
 // Ping checks if Ollama is reachable and the model is available.
 func (c *OllamaClient) Ping() error {
 	resp, err := c.httpClient.Get(c.baseURL + "/api/tags")
