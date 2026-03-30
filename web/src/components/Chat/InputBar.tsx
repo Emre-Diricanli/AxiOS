@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { Button } from "@/components/ui/button";
 
 interface InputBarProps {
   onSend: (message: string) => void;
@@ -24,7 +25,7 @@ export function InputBar({ onSend, disabled }: InputBarProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 p-3 border-t border-white/[0.06] shrink-0">
+    <form onSubmit={handleSubmit} className="flex gap-2 p-3 shrink-0">
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
@@ -32,18 +33,19 @@ export function InputBar({ onSend, disabled }: InputBarProps) {
         placeholder="Message Claude..."
         disabled={disabled}
         rows={1}
-        className="flex-1 resize-none rounded-lg bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-[13px] text-neutral-100 placeholder-neutral-600 outline-none focus:border-blue-500/40 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-40 transition-colors"
+        className="flex-1 resize-none rounded-lg bg-input/50 border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring disabled:opacity-40 transition-colors"
       />
-      <button
+      <Button
         type="submit"
+        size="sm"
         disabled={disabled || !input.trim()}
-        className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-30 disabled:hover:bg-blue-600 transition-colors shrink-0"
+        className="h-auto px-3 shrink-0"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="22" y1="2" x2="11" y2="13" />
           <polygon points="22 2 15 22 11 13 2 9 22 2" />
         </svg>
-      </button>
+      </Button>
     </form>
   );
 }

@@ -3,6 +3,8 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { MessageBubble } from "./MessageBubble";
 import { ToolBlock } from "./ToolBlock";
 import { InputBar } from "./InputBar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import type { ChatMessage } from "@/types/messages";
 
 interface DisplayMessage {
@@ -78,10 +80,7 @@ export function ChatPanel() {
       setMessages((prev) => {
         const last = prev[prev.length - 1];
         if (last && last.id === "streaming") {
-          return [
-            ...prev.slice(0, -1),
-            { ...last, id: crypto.randomUUID() },
-          ];
+          return [...prev.slice(0, -1), { ...last, id: crypto.randomUUID() }];
         }
         return prev;
       });
@@ -94,20 +93,13 @@ export function ChatPanel() {
 
   const handleSend = useCallback(
     (content: string) => {
-      const userMsg: DisplayMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content,
-      };
-      setMessages((prev) => [...prev, userMsg]);
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: "user", content },
+      ]);
       setStreaming(true);
       streamBufferRef.current = "";
-
-      send({
-        type: "user",
-        content,
-        sessionId: SESSION_ID,
-      });
+      send({ type: "user", content, sessionId: SESSION_ID });
     },
     [send]
   );
@@ -119,19 +111,19 @@ export function ChatPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Chat header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary/80 to-primary shadow-sm shadow-primary/20 flex items-center justify-center">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
             </svg>
           </div>
-          <span className="text-xs font-semibold text-neutral-300">Claude</span>
+          <span className="text-xs font-semibold">Claude</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} />
-          <span className="text-[10px] text-neutral-600">{connected ? "connected" : "offline"}</span>
-        </div>
+        <Badge variant="outline" className="h-5 text-[9px] gap-1">
+          <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-destructive"}`} />
+          {connected ? "live" : "offline"}
+        </Badge>
       </div>
 
       {/* Messages */}
@@ -139,12 +131,12 @@ export function ChatPanel() {
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/20 flex items-center justify-center">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+              <div className="w-11 h-11 mx-auto mb-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
               </div>
-              <p className="text-xs text-neutral-500">Ask Claude anything about your system</p>
+              <p className="text-xs text-muted-foreground">Ask Claude anything about your system</p>
             </div>
           </div>
         )}
@@ -171,7 +163,7 @@ export function ChatPanel() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
+      <Separator />
       <InputBar onSend={handleSend} disabled={!connected || streaming} />
     </div>
   );

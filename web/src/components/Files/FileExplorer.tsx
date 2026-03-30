@@ -62,13 +62,13 @@ export function FileExplorer() {
   const fileCount = entries.filter((e) => e.type === "file").length;
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0f]">
+    <div className="flex flex-col h-full bg-background">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-[#0f0f18]/80 shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card/60 shrink-0">
         <button
           onClick={goUp}
           disabled={currentPath === "/"}
-          className="p-1.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.06] disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
+          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
           title="Go up"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -78,7 +78,7 @@ export function FileExplorer() {
 
         <button
           onClick={refresh}
-          className="p-1.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.06] transition-colors"
+          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           title="Refresh"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -90,13 +90,13 @@ export function FileExplorer() {
           <Breadcrumb path={currentPath} onNavigate={navigateTo} />
         </div>
 
-        <div className="flex items-center border border-white/[0.08] rounded-md overflow-hidden shrink-0">
+        <div className="flex items-center border border-border rounded-md overflow-hidden shrink-0">
           <button
             onClick={() => setViewMode("grid")}
             className={`p-1.5 transition-colors ${
               viewMode === "grid"
-                ? "bg-white/[0.08] text-neutral-200"
-                : "text-neutral-600 hover:text-neutral-400"
+                ? "bg-white/[0.08] text-foreground"
+                : "text-muted-foreground hover:text-neutral-400"
             }`}
           >
             <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor">
@@ -110,8 +110,8 @@ export function FileExplorer() {
             onClick={() => setViewMode("list")}
             className={`p-1.5 transition-colors ${
               viewMode === "list"
-                ? "bg-white/[0.08] text-neutral-200"
-                : "text-neutral-600 hover:text-neutral-400"
+                ? "bg-white/[0.08] text-foreground"
+                : "text-muted-foreground hover:text-neutral-400"
             }`}
           >
             <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor">
@@ -141,7 +141,7 @@ export function FileExplorer() {
         )}
 
         {!loading && !error && entries.length === 0 && (
-          <div className="flex items-center justify-center h-32 text-neutral-700 text-xs">
+          <div className="flex items-center justify-center h-32 text-muted-foreground/50 text-xs">
             Empty directory
           </div>
         )}
@@ -152,18 +152,18 @@ export function FileExplorer() {
               <button
                 key={entry.name}
                 onClick={() => handleEntryClick(entry)}
-                className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-white/[0.04] transition-all group text-center"
+                className="flex flex-col items-center gap-1 p-3 rounded-lg hover:bg-accent transition-all group text-center"
               >
                 <FileIcon
                   name={entry.name}
                   isDir={entry.type === "dir"}
                   className="text-2xl group-hover:scale-105 transition-transform"
                 />
-                <span className="text-[11px] text-neutral-300 truncate w-full leading-tight">
+                <span className="text-[11px] text-foreground/80 truncate w-full leading-tight">
                   {entry.name}
                 </span>
                 {entry.type === "file" && (
-                  <span className="text-[9px] font-mono text-neutral-700">
+                  <span className="text-[9px] font-mono text-muted-foreground/50">
                     {formatSize(entry.size)}
                   </span>
                 )}
@@ -175,19 +175,19 @@ export function FileExplorer() {
         {!loading && !error && entries.length > 0 && viewMode === "list" && (
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-neutral-600 text-[10px] border-b border-white/[0.06] sticky top-0 bg-[#0a0a0f]">
+              <tr className="text-left text-muted-foreground text-[10px] border-b border-border sticky top-0 bg-background">
                 <th className="py-2 px-4 font-medium">
-                  <button onClick={() => setSort("name")} className="hover:text-neutral-300 transition-colors uppercase tracking-wider">
+                  <button onClick={() => setSort("name")} className="hover:text-foreground/80 transition-colors uppercase tracking-wider">
                     Name <SortIndicator active={sortKey === "name"} dir={sortDir} />
                   </button>
                 </th>
                 <th className="py-2 px-4 font-medium text-right">
-                  <button onClick={() => setSort("size")} className="hover:text-neutral-300 transition-colors uppercase tracking-wider">
+                  <button onClick={() => setSort("size")} className="hover:text-foreground/80 transition-colors uppercase tracking-wider">
                     Size <SortIndicator active={sortKey === "size"} dir={sortDir} />
                   </button>
                 </th>
                 <th className="py-2 px-4 font-medium">
-                  <button onClick={() => setSort("mod_time")} className="hover:text-neutral-300 transition-colors uppercase tracking-wider">
+                  <button onClick={() => setSort("mod_time")} className="hover:text-foreground/80 transition-colors uppercase tracking-wider">
                     Modified <SortIndicator active={sortKey === "mod_time"} dir={sortDir} />
                   </button>
                 </th>
@@ -199,19 +199,19 @@ export function FileExplorer() {
                 <tr
                   key={entry.name}
                   onClick={() => handleEntryClick(entry)}
-                  className="hover:bg-white/[0.03] cursor-pointer border-b border-white/[0.03] transition-colors"
+                  className="hover:bg-accent/50 cursor-pointer border-b border-white/[0.03] transition-colors"
                 >
                   <td className="py-1.5 px-4">
                     <div className="flex items-center gap-2">
                       <FileIcon name={entry.name} isDir={entry.type === "dir"} className="text-sm" />
-                      <span className="text-neutral-300 truncate">{entry.name}</span>
+                      <span className="text-foreground/80 truncate">{entry.name}</span>
                     </div>
                   </td>
-                  <td className="py-1.5 px-4 text-right font-mono text-neutral-600">
+                  <td className="py-1.5 px-4 text-right font-mono text-muted-foreground">
                     {entry.type === "dir" ? "-" : formatSize(entry.size)}
                   </td>
-                  <td className="py-1.5 px-4 text-neutral-600">{formatDate(entry.mod_time)}</td>
-                  <td className="py-1.5 px-4 font-mono text-neutral-700">{entry.permissions ?? "-"}</td>
+                  <td className="py-1.5 px-4 text-muted-foreground">{formatDate(entry.mod_time)}</td>
+                  <td className="py-1.5 px-4 font-mono text-muted-foreground/50">{entry.permissions ?? "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -220,9 +220,9 @@ export function FileExplorer() {
       </div>
 
       {/* Status bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-t border-white/[0.06] text-[10px] text-neutral-600 bg-[#0f0f18]/50 shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 border-t border-border text-[10px] text-muted-foreground bg-card/40 shrink-0">
         <span>{dirCount} folders, {fileCount} files</span>
-        <span className="font-mono text-neutral-700">{currentPath}</span>
+        <span className="font-mono text-muted-foreground/50">{currentPath}</span>
       </div>
 
       {selectedFile && (
