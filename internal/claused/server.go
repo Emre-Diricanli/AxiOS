@@ -224,6 +224,8 @@ func (s *Server) handleCloudMessage(conn *websocket.Conn, session *Session) {
 			return
 		}
 
+		s.logger.Info("anthropic response", "stop_reason", apiResp.StopReason, "content_blocks", len(apiResp.Content))
+
 		// Process content blocks
 		var hasToolUse bool
 		var textContent string
@@ -274,10 +276,13 @@ func (s *Server) handleCloudMessage(conn *websocket.Conn, session *Session) {
 		// Add assistant message to session (full content blocks as-is)
 		session.AddMessage(Message{Role: "assistant", Content: apiResp.Content})
 
-		if !hasToolUse {
-			// No tool use — we're done
+		if !hasToolUse || apiResp.StopReason != "tool_use" {
+			// No tool use or Claude signaled end_turn — we're done
+			s.logger.Info("loop done", "hasToolUse", hasToolUse, "stop_reason", apiResp.StopReason, "text_len", len(textContent))
 			return
 		}
+
+		s.logger.Info("continuing agentic loop with tool results", "tool_count", len(toolResults))
 
 		// Add tool results to session and loop again
 		session.AddMessage(Message{Role: "user", Content: toolResults})
