@@ -1,0 +1,40 @@
+tiers:
+  trusted:
+    - fs:read
+    - fs:write
+    - fs:create
+    - docker:list
+    - docker:start
+    - docker:stop
+    - docker:logs
+    - gpu:query
+    - system:status
+    - system:logs
+    - media:encode
+    - media:metadata
+    - git:read
+    - git:commit
+    - git:push
+    - network:status
+    - ollama:list
+    - ollama:query
+    - ollama:pull
+
+  approval_required:
+    - fs:delete
+    - docker:remove
+    - docker:prune
+    - system:reboot
+    - system:shutdown
+    - system:format
+    - network:firewall
+    - git:force_push
+    - system:package_install
+    - ollama:delete
+
+  prohibited:
+    - system:modify_claused
+    - system:disable_auth
+    - system:export_credentials
+    - system:modify_bootloader
+    - system:change_routing_mode

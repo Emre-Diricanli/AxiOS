@@ -1,0 +1,20 @@
+[Unit]
+Description=AxiOS Claude Integration Daemon
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/claused --config /etc/axios/claused.yaml
+Restart=always
+RestartSec=5
+Environment=ANTHROPIC_API_KEY=
+
+# Security hardening
+NoNewPrivileges=no
+ProtectSystem=full
+ProtectHome=no
+ReadWritePaths=/run/axios /var/log/axios /etc/axios
+
+[Install]
+WantedBy=multi-user.target

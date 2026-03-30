@@ -1,0 +1,45 @@
+profiles:
+  media:
+    name: "Media Production"
+    icon: "film"
+    description: "Video editing, transcoding, audio processing, image manipulation"
+    containers:
+      - name: handbrake
+        image: jlesage/handbrake
+      - name: imagemagick
+        image: dpokidov/imagemagick
+    system_packages:
+      - ffmpeg
+      - exiftool
+
+  code:
+    name: "Code Development"
+    icon: "code"
+    description: "Software development, CI/CD, Git workflows"
+    containers:
+      - name: code-server
+        image: linuxserver/code-server
+      - name: gitea
+        image: gitea/gitea
+
+  aiml:
+    name: "AI/ML Workloads"
+    icon: "brain"
+    description: "Model training, inference, local LLMs, GPU compute"
+    containers:
+      - name: ollama
+        image: ollama/ollama
+      - name: jupyterlab
+        image: jupyter/scipy-notebook
+      - name: comfyui
+        image: yanwk/comfyui-boot
+
+  content:
+    name: "Content Creation"
+    icon: "pen"
+    description: "Writing, blogging, documentation, publishing"
+    containers:
+      - name: ghost
+        image: ghost
+      - name: hugo
+        image: klakegg/hugo

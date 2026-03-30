@@ -1,0 +1,39 @@
+# Go
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Web UI
+web/node_modules/
+web/dist/
+
+# Yocto
+yocto/build/
+yocto/downloads/
+yocto/sstate-cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.local
+*.key
+*.pem
+
+# Test
+coverage.out
+coverage.html
