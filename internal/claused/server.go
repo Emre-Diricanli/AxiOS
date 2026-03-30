@@ -109,6 +109,16 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/fs/list", s.handleFSList)
 	mux.HandleFunc("/api/fs/read", s.handleFSRead)
 	mux.HandleFunc("/api/fs/info", s.handleFSInfo)
+
+	// Docker management
+	mux.HandleFunc("/api/docker/containers", s.handleDockerContainers)
+	mux.HandleFunc("/api/docker/containers/inspect", s.handleDockerContainer)
+	mux.HandleFunc("/api/docker/containers/action", s.handleDockerContainerAction)
+	mux.HandleFunc("/api/docker/containers/logs", s.handleDockerContainerLogs)
+	mux.HandleFunc("/api/docker/images", s.handleDockerImages)
+	mux.HandleFunc("/api/docker/images/pull", s.handleDockerImagePull)
+	mux.HandleFunc("/api/docker/compose", s.handleDockerCompose)
+	mux.HandleFunc("/api/docker/stats", s.handleDockerStats)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

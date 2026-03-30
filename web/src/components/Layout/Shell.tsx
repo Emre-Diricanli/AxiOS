@@ -14,8 +14,13 @@ const Dashboard = lazy(() =>
     default: m.Dashboard,
   }))
 );
+const ContainersPage = lazy(() =>
+  import("@/components/Containers/ContainersPage").then((m) => ({
+    default: m.ContainersPage,
+  }))
+);
 
-type Tab = "dashboard" | "files" | "terminal" | "system" | "kubernetes";
+type Tab = "dashboard" | "files" | "terminal" | "system" | "containers" | "kubernetes";
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
@@ -56,6 +61,18 @@ const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
         <rect x="4" y="4" width="16" height="16" rx="2" />
         <rect x="9" y="9" width="6" height="6" />
         <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+      </svg>
+    ),
+  },
+  {
+    id: "containers",
+    label: "Containers",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="2" width="20" height="8" rx="2" />
+        <rect x="2" y="14" width="20" height="8" rx="2" />
+        <circle cx="6" cy="6" r="1" />
+        <circle cx="6" cy="18" r="1" />
       </svg>
     ),
   },
@@ -193,6 +210,7 @@ export function Shell() {
                 {activeTab === "files" && "Browse and manage your files"}
                 {activeTab === "terminal" && "System shell access"}
                 {activeTab === "system" && "Hardware and performance metrics"}
+                {activeTab === "containers" && "Docker container management"}
                 {activeTab === "kubernetes" && "Container orchestration"}
               </p>
             </div>
@@ -216,6 +234,7 @@ export function Shell() {
                   <SystemDashboard />
                 </div>
               )}
+              {activeTab === "containers" && <ContainersPage />}
               {activeTab === "kubernetes" && <KubernetesPlaceholder />}
             </Suspense>
           </div>
