@@ -462,18 +462,24 @@ func (s *Server) handleLocalMessage(conn *websocket.Conn, session *Session) {
 				Content:  result,
 			})
 
-			// Add tool result as context and ask Ollama to summarize
+			// Truncate very long results to avoid overwhelming the model
+			truncated := result
+			if len(truncated) > 2000 {
+				truncated = truncated[:2000] + "\n...(truncated)"
+			}
+
 			ollamaMessages = append(ollamaMessages, ollamaChatMessage{
 				Role:    "assistant",
-				Content: fmt.Sprintf("I called %s and got: %s", toolName, result),
+				Content: fmt.Sprintf("Tool %s returned data.", toolName),
+			})
+			ollamaMessages = append(ollamaMessages, ollamaChatMessage{
+				Role:    "user",
+				Content: fmt.Sprintf("Here is the raw output from %s:\n\n%s\n\nInterpret this data and give me a brief, human-friendly summary. Do NOT repeat the raw data. Just tell me the key takeaways in 2-3 short sentences.", toolName, truncated),
 			})
 		}
 
 		// Follow up call for Ollama to summarize
-		followUp, err := s.ollama.Chat(s.system, append(ollamaMessages, ollamaChatMessage{
-			Role:    "user",
-			Content: "Now summarize the tool results in a clear, concise response.",
-		}), nil)
+		followUp, err := s.ollama.Chat("You are a helpful system assistant. Always give short, clear answers. Never dump raw data — summarize it.", ollamaMessages, nil)
 		if err == nil && followUp.Message.Content != "" {
 			s.sendMessage(conn, ChatMessage{
 				Type:    "assistant",
@@ -485,14 +491,16 @@ func (s *Server) handleLocalMessage(conn *websocket.Conn, session *Session) {
 		return
 	}
 
-	// Simple text response
+	// Simple text response — stream it for better UX
 	if resp.Message.Content != "" {
+		// Send in chunks to simulate streaming
+		content := resp.Message.Content
 		s.sendMessage(conn, ChatMessage{
 			Type:    "assistant",
-			Content: resp.Message.Content,
+			Content: content,
 			Model:   s.ollama.model,
 		})
-		session.AddMessage(Message{Role: "assistant", Content: resp.Message.Content})
+		session.AddMessage(Message{Role: "assistant", Content: content})
 	}
 }
 

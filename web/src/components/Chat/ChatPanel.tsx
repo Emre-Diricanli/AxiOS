@@ -96,8 +96,8 @@ export function ChatPanel() {
             </svg>
           </div>
           <div>
-            <span className="text-sm font-semibold">Claude</span>
-            <p className="text-[10px] text-muted-foreground">AI Assistant</p>
+            <span className="text-sm font-semibold">Axi<span className="text-primary">OS</span></span>
+            <p className="text-[10px] text-muted-foreground">System Intelligence</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-full glass-subtle">
