@@ -6,7 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/exec"
+	"sync"
 
+	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 )
 
@@ -74,9 +78,13 @@ func (s *Server) BuildTools() []any {
 
 // SetupRoutes registers HTTP handlers.
 func (s *Server) SetupRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/ws/terminal", s.handleTerminalWebSocket)
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/status", s.handleStatus)
+
+	// System stats endpoint (gathered directly, no MCP)
+	mux.HandleFunc("/api/system/stats", s.handleSystemStats)
 
 	// Filesystem REST endpoints (call axios-fs MCP server directly)
 	mux.HandleFunc("/api/fs/list", s.handleFSList)
@@ -306,6 +314,99 @@ func (s *Server) executeTool(toolName, toolID string, rawInput json.RawMessage) 
 	}
 
 	return result.Content
+}
+
+// terminalResizeMsg is the JSON message format for terminal resize events.
+type terminalResizeMsg struct {
+	Type string `json:"type"`
+	Cols uint16 `json:"cols"`
+	Rows uint16 `json:"rows"`
+}
+
+func (s *Server) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		s.logger.Error("terminal websocket upgrade failed", "error", err)
+		return
+	}
+	defer conn.Close()
+
+	s.logger.Info("terminal websocket client connected")
+
+	// Determine shell to use
+	shell := "/bin/bash"
+	if _, err := os.Stat("/bin/zsh"); err == nil {
+		shell = "/bin/zsh"
+	}
+
+	cmd := exec.Command(shell)
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		s.logger.Error("failed to start pty", "error", err)
+		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("Failed to start shell: %v\r\n", err)))
+		return
+	}
+	defer func() {
+		_ = ptmx.Close()
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	}()
+
+	// Set initial size
+	_ = pty.Setsize(ptmx, &pty.Winsize{Rows: 24, Cols: 80})
+
+	var once sync.Once
+	done := make(chan struct{})
+
+	// PTY -> WebSocket
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := ptmx.Read(buf)
+			if err != nil {
+				once.Do(func() { close(done) })
+				return
+			}
+			if err := conn.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
+				once.Do(func() { close(done) })
+				return
+			}
+		}
+	}()
+
+	// WebSocket -> PTY
+	go func() {
+		for {
+			msgType, msg, err := conn.ReadMessage()
+			if err != nil {
+				once.Do(func() { close(done) })
+				return
+			}
+
+			// Check if it's a JSON resize message
+			if msgType == websocket.TextMessage {
+				var resize terminalResizeMsg
+				if json.Unmarshal(msg, &resize) == nil && resize.Type == "resize" {
+					_ = pty.Setsize(ptmx, &pty.Winsize{
+						Rows: resize.Rows,
+						Cols: resize.Cols,
+					})
+					continue
+				}
+			}
+
+			// Otherwise forward raw data to PTY
+			if _, err := ptmx.Write(msg); err != nil {
+				once.Do(func() { close(done) })
+				return
+			}
+		}
+	}()
+
+	<-done
+	s.logger.Info("terminal websocket client disconnected")
 }
 
 func (s *Server) sendMessage(conn *websocket.Conn, msg ChatMessage) {

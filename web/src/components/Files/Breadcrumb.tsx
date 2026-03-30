@@ -7,10 +7,10 @@ export function Breadcrumb({ path, onNavigate }: BreadcrumbProps) {
   const segments = path.split("/").filter(Boolean);
 
   return (
-    <nav className="flex items-center gap-1 text-sm font-mono min-w-0 overflow-x-auto">
+    <nav className="flex items-center gap-0.5 text-xs font-mono min-w-0 overflow-x-auto scrollbar-none">
       <button
         onClick={() => onNavigate("/")}
-        className="shrink-0 px-1.5 py-0.5 rounded text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-colors"
+        className="shrink-0 px-1.5 py-0.5 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.06] transition-colors"
       >
         /
       </button>
@@ -18,14 +18,14 @@ export function Breadcrumb({ path, onNavigate }: BreadcrumbProps) {
         const segmentPath = "/" + segments.slice(0, i + 1).join("/");
         const isLast = i === segments.length - 1;
         return (
-          <span key={segmentPath} className="flex items-center gap-1 min-w-0">
-            <span className="text-neutral-600 shrink-0">/</span>
+          <span key={segmentPath} className="flex items-center gap-0.5 min-w-0">
+            <span className="text-neutral-700 shrink-0">/</span>
             <button
               onClick={() => onNavigate(segmentPath)}
-              className={`truncate px-1.5 py-0.5 rounded transition-colors ${
+              className={`truncate max-w-[120px] px-1.5 py-0.5 rounded-md transition-colors ${
                 isLast
-                  ? "text-neutral-100 bg-neutral-800/50"
-                  : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800"
+                  ? "text-neutral-200 font-medium"
+                  : "text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.06]"
               }`}
             >
               {segment}
