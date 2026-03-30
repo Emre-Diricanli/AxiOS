@@ -54,7 +54,7 @@ func main() {
 	router.SetLocalAvailable(cfg.Ollama.Enabled)
 
 	// Initialize MCP manager
-	mcpManager := claused.NewMCPManager(logger)
+	mcpManager := claused.NewMCPManager(cfg.MCP.SocketDir, logger)
 	defer mcpManager.Close()
 
 	// Connect to configured MCP servers

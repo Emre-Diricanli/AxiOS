@@ -3,6 +3,7 @@ package claused
 import (
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync"
 
 	"github.com/axios-os/axios/pkg/mcp"
@@ -10,22 +11,27 @@ import (
 
 // MCPManager manages connections to MCP servers.
 type MCPManager struct {
-	clients map[string]*mcp.Client
-	mu      sync.RWMutex
-	logger  *slog.Logger
+	clients   map[string]*mcp.Client
+	socketDir string
+	mu        sync.RWMutex
+	logger    *slog.Logger
 }
 
 // NewMCPManager creates a new MCP server manager.
-func NewMCPManager(logger *slog.Logger) *MCPManager {
+func NewMCPManager(socketDir string, logger *slog.Logger) *MCPManager {
+	if socketDir == "" {
+		socketDir = mcp.SocketDir
+	}
 	return &MCPManager{
-		clients: make(map[string]*mcp.Client),
-		logger:  logger,
+		clients:   make(map[string]*mcp.Client),
+		socketDir: socketDir,
+		logger:    logger,
 	}
 }
 
 // Connect establishes a connection to an MCP server.
 func (m *MCPManager) Connect(serverName string) error {
-	socketPath := mcp.SocketPath(serverName)
+	socketPath := filepath.Join(m.socketDir, serverName+".sock")
 
 	client, err := mcp.Dial(socketPath)
 	if err != nil {
