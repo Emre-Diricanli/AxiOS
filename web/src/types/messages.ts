@@ -11,3 +11,11 @@ export interface StatusInfo {
   backend: "cloud" | "local";
   routing: string;
 }
+
+export interface FileEntry {
+  name: string;
+  type: "file" | "dir";
+  size: number;
+  permissions?: string;
+  mod_time?: string;
+}

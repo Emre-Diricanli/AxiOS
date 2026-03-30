@@ -77,6 +77,11 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/status", s.handleStatus)
+
+	// Filesystem REST endpoints (call axios-fs MCP server directly)
+	mux.HandleFunc("/api/fs/list", s.handleFSList)
+	mux.HandleFunc("/api/fs/read", s.handleFSRead)
+	mux.HandleFunc("/api/fs/info", s.handleFSInfo)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -307,6 +312,80 @@ func (s *Server) sendMessage(conn *websocket.Conn, msg ChatMessage) {
 	if err := conn.WriteJSON(msg); err != nil {
 		s.logger.Error("websocket write failed", "error", err)
 	}
+}
+
+// --- Filesystem REST endpoints ---
+
+func (s *Server) handleFSList(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		path = "/"
+	}
+
+	result, err := s.mcpManager.CallTool("axios-fs", "list_directory", map[string]any{"path": path})
+	if err != nil {
+		s.jsonError(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if result.IsError {
+		s.jsonError(w, result.Content, http.StatusInternalServerError)
+		return
+	}
+
+	// result.Content is already a JSON array from the MCP server
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"entries":%s}`, result.Content)
+}
+
+func (s *Server) handleFSRead(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		s.jsonError(w, "path parameter required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := s.mcpManager.CallTool("axios-fs", "read_file", map[string]any{"path": path})
+	if err != nil {
+		s.jsonError(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if result.IsError {
+		s.jsonError(w, result.Content, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	data, _ := json.Marshal(map[string]string{"content": result.Content})
+	w.Write(data)
+}
+
+func (s *Server) handleFSInfo(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		s.jsonError(w, "path parameter required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := s.mcpManager.CallTool("axios-fs", "file_info", map[string]any{"path": path})
+	if err != nil {
+		s.jsonError(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if result.IsError {
+		s.jsonError(w, result.Content, http.StatusInternalServerError)
+		return
+	}
+
+	// result.Content is already JSON from the MCP server
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(result.Content))
+}
+
+func (s *Server) jsonError(w http.ResponseWriter, msg string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	data, _ := json.Marshal(map[string]string{"error": msg})
+	w.Write(data)
 }
 
 // ListenAndServe starts the HTTP server.
