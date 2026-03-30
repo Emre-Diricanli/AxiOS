@@ -407,100 +407,113 @@ func (s *Server) handleCloudMessage(conn *websocket.Conn, session *Session) {
 
 func (s *Server) handleLocalMessage(conn *websocket.Conn, session *Session) {
 	messages := session.GetMessages()
+	lastMsg := ""
+	if len(messages) > 0 {
+		if txt, ok := messages[len(messages)-1].Content.(string); ok {
+			lastMsg = txt
+		}
+	}
+
+	s.logger.Info("sending to ollama", "message", lastMsg)
+
+	// First pass: let Ollama try with tools
 	ollamaMessages := ConvertMessagesForOllama(messages)
-
-	s.logger.Info("sending to ollama", "message_count", len(ollamaMessages))
-
-	// Try with tools first, fall back to no tools if the model doesn't support them
 	resp, err := s.ollama.Chat(s.system, ollamaMessages, s.ollamaTools)
-	if err != nil {
-		s.logger.Error("ollama request failed", "error", err)
 
-		// Try streaming without tools as fallback
-		stream, streamErr := s.ollama.StreamChat(s.system, ollamaMessages)
-		if streamErr != nil {
-			s.sendMessage(conn, ChatMessage{
-				Type:    "error",
-				Content: fmt.Sprintf("Ollama error: %v", err),
+	// If tool call fails or model doesn't support tools, just stream a plain response
+	if err != nil || (resp != nil && len(resp.Message.ToolCalls) == 0 && resp.Message.Content != "") {
+		if err != nil {
+			s.logger.Warn("ollama tool call failed, falling back to plain chat", "error", err)
+		}
+
+		// Use the response we already have, or stream a new one
+		content := ""
+		if resp != nil && resp.Message.Content != "" {
+			content = resp.Message.Content
+		} else {
+			// Stream without tools
+			stream, streamErr := s.ollama.StreamChat(s.system, ollamaMessages)
+			if streamErr != nil {
+				s.sendMessage(conn, ChatMessage{Type: "error", Content: fmt.Sprintf("Ollama error: %v", streamErr)})
+				return
+			}
+			defer stream.Close()
+
+			ParseOllamaStream(stream, func(text string, done bool) {
+				if text != "" {
+					content += text
+					s.sendMessage(conn, ChatMessage{Type: "assistant", Content: text, Model: s.ollama.model})
+				}
 			})
+			session.AddMessage(Message{Role: "assistant", Content: content})
 			return
 		}
-		defer stream.Close()
 
-		var fullResponse string
-		ParseOllamaStream(stream, func(text string, done bool) {
-			if text != "" {
-				fullResponse += text
-				s.sendMessage(conn, ChatMessage{
-					Type:    "assistant",
-					Content: text,
-					Model:   s.ollama.model,
-				})
-			}
-		})
-		session.AddMessage(Message{Role: "assistant", Content: fullResponse})
+		s.sendMessage(conn, ChatMessage{Type: "assistant", Content: content, Model: s.ollama.model})
+		session.AddMessage(Message{Role: "assistant", Content: content})
 		return
 	}
 
-	// Handle tool calls from Ollama
-	if len(resp.Message.ToolCalls) > 0 {
+	// Handle tool calls
+	if resp != nil && len(resp.Message.ToolCalls) > 0 {
+		var toolContext string
+
 		for _, tc := range resp.Message.ToolCalls {
 			toolName := tc.Function.Name
 			s.logger.Info("ollama tool call", "tool", toolName)
 
 			inputJSON, _ := json.Marshal(tc.Function.Arguments)
-			s.sendMessage(conn, ChatMessage{
-				Type:     "tool_use",
-				ToolName: toolName,
-				Content:  string(inputJSON),
-			})
+			s.sendMessage(conn, ChatMessage{Type: "tool_use", ToolName: toolName, Content: string(inputJSON)})
 
 			result := s.executeTool(toolName, "", inputJSON)
-			s.sendMessage(conn, ChatMessage{
-				Type:     "tool_result",
-				ToolName: toolName,
-				Content:  result,
-			})
+			s.sendMessage(conn, ChatMessage{Type: "tool_result", ToolName: toolName, Content: result})
 
-			// Truncate very long results to avoid overwhelming the model
+			// Truncate for context
 			truncated := result
-			if len(truncated) > 2000 {
-				truncated = truncated[:2000] + "\n...(truncated)"
+			if len(truncated) > 1500 {
+				truncated = truncated[:1500] + "\n...(truncated)"
 			}
-
-			ollamaMessages = append(ollamaMessages, ollamaChatMessage{
-				Role:    "assistant",
-				Content: fmt.Sprintf("Tool %s returned data.", toolName),
-			})
-			ollamaMessages = append(ollamaMessages, ollamaChatMessage{
-				Role:    "user",
-				Content: fmt.Sprintf("Here is the raw output from %s:\n\n%s\n\nInterpret this data and give me a brief, human-friendly summary. Do NOT repeat the raw data. Just tell me the key takeaways in 2-3 short sentences.", toolName, truncated),
-			})
+			toolContext += fmt.Sprintf("\n[%s result]:\n%s\n", toolName, truncated)
 		}
 
-		// Follow up call for Ollama to summarize
-		followUp, err := s.ollama.Chat("You are a helpful system assistant. Always give short, clear answers. Never dump raw data — summarize it.", ollamaMessages, nil)
-		if err == nil && followUp.Message.Content != "" {
+		// Second pass: ask Ollama to summarize with a very explicit prompt
+		summaryMessages := []ollamaChatMessage{
+			{
+				Role: "system",
+				Content: "You are AxiOS system intelligence. The user asked a question and you ran system tools to get data. Now summarize the findings clearly. Rules: 1) NEVER show raw command output. 2) Use plain English. 3) Be brief — 2-4 sentences max. 4) Highlight the most important information.",
+			},
+			{
+				Role:    "user",
+				Content: fmt.Sprintf("My question was: %s\n\nHere is the data collected from the system tools:%s\n\nGive me a clear, concise answer.", lastMsg, toolContext),
+			},
+		}
+
+		s.logger.Info("asking ollama to summarize tool results")
+
+		followUp, err := s.ollama.Chat("", summaryMessages, nil)
+		if err != nil {
+			s.logger.Error("ollama summary failed", "error", err)
+			// Fallback: just tell user what we found
 			s.sendMessage(conn, ChatMessage{
 				Type:    "assistant",
-				Content: followUp.Message.Content,
+				Content: "I gathered the system data above. Check the tool results for details.",
 				Model:   s.ollama.model,
 			})
-			session.AddMessage(Message{Role: "assistant", Content: followUp.Message.Content})
+			session.AddMessage(Message{Role: "assistant", Content: "Tool results shown above."})
+			return
 		}
-		return
-	}
 
-	// Simple text response — stream it for better UX
-	if resp.Message.Content != "" {
-		// Send in chunks to simulate streaming
-		content := resp.Message.Content
-		s.sendMessage(conn, ChatMessage{
-			Type:    "assistant",
-			Content: content,
-			Model:   s.ollama.model,
-		})
-		session.AddMessage(Message{Role: "assistant", Content: content})
+		if followUp.Message.Content != "" {
+			s.sendMessage(conn, ChatMessage{Type: "assistant", Content: followUp.Message.Content, Model: s.ollama.model})
+			session.AddMessage(Message{Role: "assistant", Content: followUp.Message.Content})
+		} else {
+			s.sendMessage(conn, ChatMessage{
+				Type:    "assistant",
+				Content: "I ran the tools but couldn't generate a summary. See the results above.",
+				Model:   s.ollama.model,
+			})
+			session.AddMessage(Message{Role: "assistant", Content: "Tool results shown above."})
+		}
 	}
 }
 
