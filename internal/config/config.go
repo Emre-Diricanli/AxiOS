@@ -23,8 +23,9 @@ type ServerConfig struct {
 }
 
 type AnthropicConfig struct {
-	APIKey string `yaml:"api_key"`
-	Model  string `yaml:"model"`
+	APIKey     string `yaml:"api_key"`      // Standard API key (sk-ant-api03-...)
+	OAuthToken string `yaml:"oauth_token"`  // OAuth token from `claude setup-token` (sk-ant-oat01-...)
+	Model      string `yaml:"model"`
 }
 
 type OllamaConfig struct {

@@ -3,8 +3,15 @@ server:
   port: 3000
 
 anthropic:
-  # API key can also be set via ANTHROPIC_API_KEY env var
+  # Option 1: Standard API key from console.anthropic.com (pay per token)
+  # Can also be set via ANTHROPIC_API_KEY env var
   api_key: ""
+
+  # Option 2: OAuth token from your Claude subscription (free with Pro/Max)
+  # Run `claude setup-token` in your terminal, paste the token here
+  # Can also be set via ANTHROPIC_OAUTH_TOKEN env var
+  oauth_token: ""
+
   model: "claude-sonnet-4-6"
 
 ollama:

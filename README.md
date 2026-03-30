@@ -137,7 +137,9 @@ AxiOS ships with pre-configured support for four creator domains, pulled as Dock
 
 - Go 1.25+
 - Node.js 22+
-- An Anthropic API key
+- Anthropic credentials (one of the following):
+  - **OAuth token** from your Claude subscription — run `claude setup-token` (free with Pro/Max)
+  - **API key** from [console.anthropic.com](https://console.anthropic.com) (pay per token)
 
 ### Quick Start
 
@@ -145,8 +147,14 @@ AxiOS ships with pre-configured support for four creator domains, pulled as Dock
 git clone https://github.com/Emre-Diricanli/AxiOS.git
 cd AxiOS
 
+# Option 1: Use your Claude subscription (free)
+claude setup-token  # copy the token it outputs
+export ANTHROPIC_OAUTH_TOKEN=sk-ant-oat01-...
+
+# Option 2: Use an API key (paid per token)
+export ANTHROPIC_API_KEY=sk-ant-api03-...
+
 # Start the daemon
-export ANTHROPIC_API_KEY=your-key-here
 make dev-claused
 
 # In another terminal — start the web UI

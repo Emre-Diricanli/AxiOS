@@ -22,17 +22,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize Anthropic client
-	apiKey := cfg.Anthropic.APIKey
-	if envKey := os.Getenv("ANTHROPIC_API_KEY"); envKey != "" {
-		apiKey = envKey
-	}
-	if apiKey == "" {
-		logger.Error("no Anthropic API key configured")
+	// Resolve Anthropic token — priority: env vars > config file
+	// Supports both standard API keys and OAuth tokens from `claude setup-token`
+	token := ""
+	switch {
+	case os.Getenv("ANTHROPIC_OAUTH_TOKEN") != "":
+		token = os.Getenv("ANTHROPIC_OAUTH_TOKEN")
+		logger.Info("using OAuth token from ANTHROPIC_OAUTH_TOKEN env var")
+	case os.Getenv("ANTHROPIC_API_KEY") != "":
+		token = os.Getenv("ANTHROPIC_API_KEY")
+		logger.Info("using API key from ANTHROPIC_API_KEY env var")
+	case cfg.Anthropic.OAuthToken != "":
+		token = cfg.Anthropic.OAuthToken
+		logger.Info("using OAuth token from config")
+	case cfg.Anthropic.APIKey != "":
+		token = cfg.Anthropic.APIKey
+		logger.Info("using API key from config")
+	default:
+		logger.Error("no Anthropic credentials configured. Set ANTHROPIC_API_KEY, ANTHROPIC_OAUTH_TOKEN, or run: claude setup-token")
 		os.Exit(1)
 	}
 
-	anthropic := claused.NewAnthropicClient(apiKey, cfg.Anthropic.Model)
+	authType := claused.DetectAuthType(token)
+	logger.Info("auth type detected", "type", string(authType))
+
+	anthropic := claused.NewAnthropicClient(token, cfg.Anthropic.Model)
 
 	// Initialize router
 	router := claused.NewRouter(claused.RoutingMode(cfg.Routing.Mode), logger)

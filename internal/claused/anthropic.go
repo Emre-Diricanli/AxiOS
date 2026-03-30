@@ -11,20 +11,40 @@ import (
 
 const anthropicAPIURL = "https://api.anthropic.com/v1/messages"
 
+// AuthType indicates how the client authenticates with the Anthropic API.
+type AuthType string
+
+const (
+	AuthAPIKey AuthType = "api_key" // Standard API key (sk-ant-api03-...)
+	AuthOAuth  AuthType = "oauth"   // OAuth token from claude setup-token (sk-ant-oat01-...)
+)
+
 // AnthropicClient communicates with the Anthropic Messages API.
 type AnthropicClient struct {
-	apiKey     string
+	token      string
+	authType   AuthType
 	model      string
 	httpClient *http.Client
 }
 
 // NewAnthropicClient creates a client for the Anthropic API.
-func NewAnthropicClient(apiKey, model string) *AnthropicClient {
+// Automatically detects whether the token is an API key or OAuth token.
+func NewAnthropicClient(token, model string) *AnthropicClient {
+	authType := DetectAuthType(token)
 	return &AnthropicClient{
-		apiKey:     apiKey,
+		token:      token,
+		authType:   authType,
 		model:      model,
 		httpClient: &http.Client{},
 	}
+}
+
+// DetectAuthType determines the auth type from the token prefix.
+func DetectAuthType(token string) AuthType {
+	if len(token) >= 14 && token[:14] == "sk-ant-oat01-" {
+		return AuthOAuth
+	}
+	return AuthAPIKey
 }
 
 // Message represents a conversation message.
@@ -125,8 +145,14 @@ func (c *AnthropicClient) doRequest(reqBody MessagesRequest) (*http.Response, er
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
+
+	switch c.authType {
+	case AuthOAuth:
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	default:
+		req.Header.Set("x-api-key", c.token)
+	}
 
 	return c.httpClient.Do(req)
 }

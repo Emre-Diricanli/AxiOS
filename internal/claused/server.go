@@ -58,8 +58,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"backend": string(s.router.Route()),
-		"routing": string(s.router.mode),
+		"backend":  string(s.router.Route()),
+		"routing":  string(s.router.mode),
+		"authType": string(s.anthropic.authType),
+		"model":    s.anthropic.model,
 	})
 }
 
