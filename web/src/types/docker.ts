@@ -11,9 +11,9 @@ export interface Container {
 export interface ContainerStats {
   id: string;
   name: string;
-  cpu_percent: string;
+  cpu_perc: string;
   mem_usage: string;
-  mem_percent: string;
+  mem_perc: string;
   net_io: string;
   block_io: string;
 }

@@ -37,8 +37,8 @@ export function useDocker(intervalMs = 5000): UseDockerReturn {
     try {
       const res = await fetch("/api/docker/containers");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: Container[] = await res.json();
-      setContainers(data ?? []);
+      const data = await res.json();
+      setContainers(data.containers ?? data ?? []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch containers");
@@ -51,8 +51,8 @@ export function useDocker(intervalMs = 5000): UseDockerReturn {
     try {
       const res = await fetch("/api/docker/stats");
       if (!res.ok) return;
-      const data: ContainerStats[] = await res.json();
-      setStats(data ?? []);
+      const data = await res.json();
+      setStats(data.stats ?? data ?? []);
     } catch {
       // stats are best-effort, don't set error
     }
@@ -171,8 +171,8 @@ export function useDocker(intervalMs = 5000): UseDockerReturn {
   const fetchImages = useCallback(async () => {
     const res = await fetch("/api/docker/images");
     if (!res.ok) throw new Error(`Fetch images failed: HTTP ${res.status}`);
-    const data: DockerImage[] = await res.json();
-    setImages(data ?? []);
+    const data = await res.json();
+    setImages(data.images ?? data ?? []);
   }, []);
 
   return {

@@ -550,7 +550,7 @@ function ContainerRow({
         {stat ? (
           <div className="space-y-0.5">
             <p className="text-[10px] font-mono text-muted-foreground">
-              CPU {stat.cpu_percent}
+              CPU {stat.cpu_perc}
             </p>
             <p className="text-[10px] font-mono text-muted-foreground">
               MEM {stat.mem_usage}
