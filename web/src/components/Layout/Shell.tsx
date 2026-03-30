@@ -1,10 +1,6 @@
 import { useCallback, useRef, useState, useEffect, lazy, Suspense } from "react";
 import { ChatPanel } from "@/components/Chat/ChatPanel";
 import { FileExplorer } from "@/components/Files/FileExplorer";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 
 const Terminal = lazy(() => import("@/components/Terminal/Terminal"));
 const SystemDashboard = lazy(() =>
@@ -13,17 +9,65 @@ const SystemDashboard = lazy(() =>
   }))
 );
 
-const MIN_CHAT_PX = 340;
+type Tab = "files" | "terminal" | "system" | "kubernetes";
+
+const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  {
+    id: "files",
+    label: "Files",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+      </svg>
+    ),
+  },
+  {
+    id: "terminal",
+    label: "Terminal",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 17l6-5-6-5M12 19h8" />
+      </svg>
+    ),
+  },
+  {
+    id: "system",
+    label: "System",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <rect x="9" y="9" width="6" height="6" />
+        <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+      </svg>
+    ),
+  },
+  {
+    id: "kubernetes",
+    label: "K8s",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+      </svg>
+    ),
+  },
+];
+
+const MIN_CHAT_PX = 360;
 
 function LoadingSpinner() {
   return (
     <div className="flex items-center justify-center h-full">
-      <div className="w-5 h-5 border-2 border-muted border-t-primary rounded-full animate-spin" />
+      <div className="relative w-8 h-8">
+        <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+        <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
+      </div>
     </div>
   );
 }
 
 export function Shell() {
+  const [activeTab, setActiveTab] = useState<Tab>("files");
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(400);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,7 +83,7 @@ export function Shell() {
     if (!dragging.current || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const newWidth = rect.right - e.clientX;
-    setChatWidth(Math.max(MIN_CHAT_PX, Math.min(rect.width * 0.55, newWidth)));
+    setChatWidth(Math.max(MIN_CHAT_PX, Math.min(rect.width * 0.5, newWidth)));
   }, []);
 
   const onPointerUp = useCallback(() => {
@@ -47,123 +91,138 @@ export function Shell() {
   }, []);
 
   useEffect(() => {
-    const onSelect = (e: Event) => {
+    const handler = (e: Event) => {
       if (dragging.current) e.preventDefault();
     };
-    document.addEventListener("selectstart", onSelect);
-    return () => document.removeEventListener("selectstart", onSelect);
+    document.addEventListener("selectstart", handler);
+    return () => document.removeEventListener("selectstart", handler);
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
-      <Tabs defaultValue="files" className="flex-1 flex flex-col min-h-0 gap-0">
-        {/* Top bar */}
-        <header className="flex items-center justify-between px-4 h-12 border-b bg-card/60 backdrop-blur-md select-none shrink-0">
-          <div className="flex items-center gap-4">
-            {/* Logo */}
-            <div className="flex items-center gap-2.5 pr-4">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary/90 to-primary shadow-md shadow-primary/20 flex items-center justify-center">
-                <span className="text-[11px] font-black text-primary-foreground tracking-tight">Ax</span>
-              </div>
-              <span className="text-sm font-bold tracking-tight">
-                Axi<span className="text-primary">OS</span>
-              </span>
+    <div className="h-screen flex bg-background text-foreground overflow-hidden">
+      {/* ── Left Sidebar ─────────────────────────────────────────────── */}
+      <aside className="w-[68px] shrink-0 flex flex-col items-center py-4 gap-2 glass-subtle border-r border-border z-10">
+        {/* Logo */}
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center mb-4 glow-sm cursor-default select-none">
+          <span className="text-xs font-black text-white tracking-tighter">Ax</span>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex flex-col items-center gap-1 flex-1">
+          {NAV_ITEMS.map((item) => {
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                title={item.label}
+                className={`relative w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 group ${
+                  active
+                    ? "bg-primary/15 text-primary glow-sm border-glow"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`}
+              >
+                {item.icon}
+                {/* Active indicator */}
+                {active && (
+                  <div className="absolute -left-[13px] top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                )}
+                {/* Tooltip */}
+                <span className="absolute left-full ml-3 px-2.5 py-1 rounded-md bg-popover text-popover-foreground text-[11px] font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity shadow-xl border border-border z-50">
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Bottom: AI toggle */}
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-8 h-px bg-border mb-1" />
+          <button
+            onClick={() => setChatOpen(!chatOpen)}
+            title="AI Chat"
+            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 ${
+              chatOpen
+                ? "bg-primary text-primary-foreground glow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            }`}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+          </button>
+
+          {/* Status dot */}
+          <div className="flex items-center justify-center w-8 h-8">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main Area ────────────────────────────────────────────────── */}
+      <div ref={containerRef} className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Content */}
+        <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
+          {/* Page header */}
+          <div className="shrink-0 px-6 py-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight">
+                {NAV_ITEMS.find((n) => n.id === activeTab)?.label}
+              </h1>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {activeTab === "files" && "Browse and manage your files"}
+                {activeTab === "terminal" && "System shell access"}
+                {activeTab === "system" && "Hardware and performance metrics"}
+                {activeTab === "kubernetes" && "Container orchestration"}
+              </p>
             </div>
-
-            <Separator orientation="vertical" className="h-5" />
-
-            {/* Tabs */}
-            <TabsList variant="line" className="h-8">
-              <TabsTrigger value="files" className="gap-1.5 text-xs">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                Files
-              </TabsTrigger>
-              <TabsTrigger value="terminal" className="gap-1.5 text-xs">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 17l6-5-6-5M12 19h8" />
-                </svg>
-                Terminal
-              </TabsTrigger>
-              <TabsTrigger value="system" className="gap-1.5 text-xs">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                </svg>
-                System
-              </TabsTrigger>
-              <TabsTrigger value="kubernetes" className="gap-1.5 text-xs">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-                Kubernetes
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex items-center gap-2">
+              <div className="glass rounded-full px-3 py-1.5 flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
+                <span className="text-[10px] font-mono text-muted-foreground">AxiOS v0.1</span>
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* AI Chat toggle */}
-            <Button
-              variant={chatOpen ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setChatOpen(!chatOpen)}
-              className={`gap-1.5 text-xs h-7 ${chatOpen ? "shadow-sm shadow-primary/20" : ""}`}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-              </svg>
-              AI
-            </Button>
-
-            <Separator orientation="vertical" className="h-5" />
-
-            {/* Status */}
-            <Badge variant="outline" className="h-6 gap-1.5 text-[10px] font-mono text-muted-foreground">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
-              online
-            </Badge>
-          </div>
-        </header>
-
-        {/* Main content area */}
-        <div ref={containerRef} className="flex-1 flex min-h-0 overflow-hidden">
-          {/* Main panel */}
-          <div className="flex-1 min-w-0 overflow-hidden">
+          {/* Tab content */}
+          <div className="flex-1 min-h-0 overflow-hidden mx-4 mb-4 rounded-xl glass">
             <Suspense fallback={<LoadingSpinner />}>
-              <TabsContent value="files" className="h-full">
-                <FileExplorer />
-              </TabsContent>
-              <TabsContent value="terminal" className="h-full">
-                <Terminal className="h-full" />
-              </TabsContent>
-              <TabsContent value="system" className="h-full overflow-y-auto">
-                <SystemDashboard />
-              </TabsContent>
-              <TabsContent value="kubernetes" className="h-full">
-                <KubernetesPlaceholder />
-              </TabsContent>
+              {activeTab === "files" && <FileExplorer />}
+              {activeTab === "terminal" && <Terminal className="h-full" />}
+              {activeTab === "system" && (
+                <div className="h-full overflow-y-auto scrollbar-none">
+                  <SystemDashboard />
+                </div>
+              )}
+              {activeTab === "kubernetes" && <KubernetesPlaceholder />}
             </Suspense>
           </div>
-
-          {/* Chat panel */}
-          {chatOpen && (
-            <>
-              <div
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                className="w-px shrink-0 bg-border hover:bg-primary/40 active:bg-primary/60 cursor-col-resize transition-colors"
-              />
-              <div
-                className="shrink-0 min-w-0 overflow-hidden bg-card/40 backdrop-blur-sm border-l"
-                style={{ width: chatWidth }}
-              >
-                <ChatPanel />
-              </div>
-            </>
-          )}
         </div>
-      </Tabs>
+
+        {/* Chat panel */}
+        {chatOpen && (
+          <>
+            {/* Resize handle */}
+            <div
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              className="w-[3px] shrink-0 cursor-col-resize flex items-center justify-center group"
+            >
+              <div className="w-px h-full bg-border group-hover:bg-primary/40 group-active:bg-primary/60 transition-colors" />
+            </div>
+
+            {/* Chat */}
+            <div
+              className="shrink-0 min-w-0 overflow-hidden flex flex-col my-4 mr-4 rounded-xl glass"
+              style={{ width: chatWidth }}
+            >
+              <ChatPanel />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -172,12 +231,13 @@ function KubernetesPlaceholder() {
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted/50 border flex items-center justify-center">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
-            <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+        <div className="w-20 h-20 mx-auto mb-5 rounded-2xl glass flex items-center justify-center glow-primary">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
           </svg>
         </div>
-        <h3 className="text-sm font-medium text-foreground/60 mb-1">Kubernetes</h3>
+        <h3 className="text-sm font-medium text-foreground mb-1">Kubernetes</h3>
         <p className="text-xs text-muted-foreground">Container orchestration coming soon</p>
       </div>
     </div>

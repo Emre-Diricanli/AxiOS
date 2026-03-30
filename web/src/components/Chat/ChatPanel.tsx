@@ -3,8 +3,6 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { MessageBubble } from "./MessageBubble";
 import { ToolBlock } from "./ToolBlock";
 import { InputBar } from "./InputBar";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import type { ChatMessage } from "@/types/messages";
 
 interface DisplayMessage {
@@ -36,12 +34,7 @@ export function ChatPanel() {
         }
         return [
           ...prev,
-          {
-            id: "streaming",
-            role: "assistant",
-            content: streamBufferRef.current,
-            model: msg.model,
-          },
+          { id: "streaming", role: "assistant", content: streamBufferRef.current, model: msg.model },
         ];
       });
     } else if (msg.type === "tool_use") {
@@ -51,30 +44,17 @@ export function ChatPanel() {
         if (last && last.id === "streaming") {
           updated[updated.length - 1] = { ...last, id: crypto.randomUUID() };
         }
-        updated.push({
-          id: crypto.randomUUID(),
-          role: "tool_use",
-          content: msg.content,
-          toolName: msg.toolName,
-        });
+        updated.push({ id: crypto.randomUUID(), role: "tool_use", content: msg.content, toolName: msg.toolName });
         return updated;
       });
       streamBufferRef.current = "";
     } else if (msg.type === "tool_result") {
       setMessages((prev) => [
         ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "tool_result",
-          content: msg.content,
-          toolName: msg.toolName,
-        },
+        { id: crypto.randomUUID(), role: "tool_result", content: msg.content, toolName: msg.toolName },
       ]);
     } else if (msg.type === "error") {
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "error", content: msg.content },
-      ]);
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "error", content: msg.content }]);
       setStreaming(false);
     } else if (msg.type === "status" && msg.content === "done") {
       setMessages((prev) => {
@@ -93,10 +73,7 @@ export function ChatPanel() {
 
   const handleSend = useCallback(
     (content: string) => {
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "user", content },
-      ]);
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content }]);
       setStreaming(true);
       streamBufferRef.current = "";
       send({ type: "user", content, sessionId: SESSION_ID });
@@ -110,60 +87,50 @@ export function ChatPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Chat header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b shrink-0">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary/80 to-primary shadow-sm shadow-primary/20 flex items-center justify-center">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center shadow-[0_0_12px_rgba(99,102,241,0.3)]">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
             </svg>
           </div>
-          <span className="text-xs font-semibold">Claude</span>
+          <div>
+            <span className="text-sm font-semibold">Claude</span>
+            <p className="text-[10px] text-muted-foreground">AI Assistant</p>
+          </div>
         </div>
-        <Badge variant="outline" className="h-5 text-[9px] gap-1">
-          <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-destructive"}`} />
-          {connected ? "live" : "offline"}
-        </Badge>
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full glass-subtle">
+          <div className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" : "bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]"}`} />
+          <span className="text-[10px] font-mono text-muted-foreground">{connected ? "live" : "offline"}</span>
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 scrollbar-none">
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <div className="w-11 h-11 mx-auto mb-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl glass flex items-center justify-center glow-primary">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
               </div>
-              <p className="text-xs text-muted-foreground">Ask Claude anything about your system</p>
+              <p className="text-sm font-medium text-foreground/70 mb-1">Ask Claude anything</p>
+              <p className="text-xs text-muted-foreground">System commands, file management, and more</p>
             </div>
           </div>
         )}
         {messages.map((msg) => {
           if (msg.role === "tool_use" || msg.role === "tool_result") {
-            return (
-              <ToolBlock
-                key={msg.id}
-                type={msg.role}
-                toolName={msg.toolName ?? "unknown"}
-                content={msg.content}
-              />
-            );
+            return <ToolBlock key={msg.id} type={msg.role} toolName={msg.toolName ?? "unknown"} content={msg.content} />;
           }
-          return (
-            <MessageBubble
-              key={msg.id}
-              role={msg.role}
-              content={msg.content}
-              model={msg.model}
-            />
-          );
+          return <MessageBubble key={msg.id} role={msg.role} content={msg.content} model={msg.model} />;
         })}
         <div ref={messagesEndRef} />
       </div>
 
-      <Separator />
+      {/* Input */}
       <InputBar onSend={handleSend} disabled={!connected || streaming} />
     </div>
   );

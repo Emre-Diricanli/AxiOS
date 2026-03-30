@@ -62,9 +62,9 @@ export function FileExplorer() {
   const fileCount = entries.filter((e) => e.type === "file").length;
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card/60 shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
         <button
           onClick={goUp}
           disabled={currentPath === "/"}
@@ -220,7 +220,7 @@ export function FileExplorer() {
       </div>
 
       {/* Status bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-t border-border text-[10px] text-muted-foreground bg-card/40 shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 border-t border-border text-[10px] text-muted-foreground shrink-0">
         <span>{dirCount} folders, {fileCount} files</span>
         <span className="font-mono text-muted-foreground/50">{currentPath}</span>
       </div>

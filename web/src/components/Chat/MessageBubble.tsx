@@ -8,7 +8,7 @@ export function MessageBubble({ role, content, model }: MessageBubbleProps) {
   if (role === "error") {
     return (
       <div className="flex justify-start">
-        <div className="max-w-[90%] rounded-lg px-3 py-2 bg-destructive/10 text-destructive border border-destructive/20 text-xs">
+        <div className="max-w-[90%] rounded-lg px-3 py-2 bg-destructive/10 text-red-300 border border-destructive/20 text-xs">
           {content}
         </div>
       </div>
@@ -20,10 +20,10 @@ export function MessageBubble({ role, content, model }: MessageBubbleProps) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[90%] rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
+        className={`max-w-[90%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
           isUser
-            ? "bg-primary text-primary-foreground rounded-br-sm"
-            : "bg-secondary text-secondary-foreground border rounded-bl-sm"
+            ? "bg-primary text-primary-foreground rounded-br-md shadow-[0_2px_12px_rgba(99,102,241,0.25)]"
+            : "glass rounded-bl-md"
         }`}
       >
         <p className="whitespace-pre-wrap break-words">{content}</p>
