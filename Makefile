@@ -1,4 +1,4 @@
-.PHONY: all build claused web clean dev test
+.PHONY: all build claused web clean dev test start stop
 
 SOCKET_DIR ?= /tmp/axios-mcp
 
@@ -33,12 +33,12 @@ dev-claused:
 dev-web:
 	cd web && npm run dev
 
-# Start everything for development (run in separate terminals)
-dev:
-	@echo "Run these in separate terminals:"
-	@echo "  make dev-mcp      # Start MCP servers"
-	@echo "  make dev-claused  # Start claused daemon"
-	@echo "  make dev-web      # Start web UI"
+# Start everything with one command
+start:
+	@./scripts/axios start
+
+stop:
+	@./scripts/axios stop
 
 # Run tests
 test:
