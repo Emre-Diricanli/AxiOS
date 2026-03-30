@@ -43,6 +43,8 @@ export function FileExplorer() {
     sortKey,
     sortDir,
     setSort,
+    showDotfiles,
+    setShowDotfiles,
   } = useFileSystem("/");
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -89,6 +91,19 @@ export function FileExplorer() {
         <div className="flex-1 min-w-0">
           <Breadcrumb path={currentPath} onNavigate={navigateTo} />
         </div>
+
+        {/* Dotfiles toggle */}
+        <button
+          onClick={() => setShowDotfiles(!showDotfiles)}
+          title={showDotfiles ? "Hide dotfiles" : "Show dotfiles"}
+          className={`p-1.5 rounded-md text-xs font-mono transition-colors shrink-0 ${
+            showDotfiles
+              ? "bg-primary/15 text-primary border-glow"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+          }`}
+        >
+          .*
+        </button>
 
         <div className="flex items-center border border-border rounded-md overflow-hidden shrink-0">
           <button

@@ -8,10 +8,27 @@ const SystemDashboard = lazy(() =>
     default: m.SystemDashboard,
   }))
 );
+const Dashboard = lazy(() =>
+  import("@/components/Dashboard/Dashboard").then((m) => ({
+    default: m.Dashboard,
+  }))
+);
 
-type Tab = "files" | "terminal" | "system" | "kubernetes";
+type Tab = "dashboard" | "files" | "terminal" | "system" | "kubernetes";
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+    ),
+  },
   {
     id: "files",
     label: "Files",
@@ -67,7 +84,7 @@ function LoadingSpinner() {
 }
 
 export function Shell() {
-  const [activeTab, setActiveTab] = useState<Tab>("files");
+  const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(400);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -171,6 +188,7 @@ export function Shell() {
                 {NAV_ITEMS.find((n) => n.id === activeTab)?.label}
               </h1>
               <p className="text-xs text-muted-foreground mt-0.5">
+                {activeTab === "dashboard" && "System overview and quick actions"}
                 {activeTab === "files" && "Browse and manage your files"}
                 {activeTab === "terminal" && "System shell access"}
                 {activeTab === "system" && "Hardware and performance metrics"}
@@ -188,6 +206,7 @@ export function Shell() {
           {/* Tab content */}
           <div className="flex-1 min-h-0 overflow-hidden mx-4 mb-4 rounded-xl glass">
             <Suspense fallback={<LoadingSpinner />}>
+              {activeTab === "dashboard" && <Dashboard />}
               {activeTab === "files" && <FileExplorer />}
               {activeTab === "terminal" && <Terminal className="h-full" />}
               {activeTab === "system" && (

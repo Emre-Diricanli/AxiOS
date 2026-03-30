@@ -5,28 +5,19 @@ type SortKey = "name" | "size" | "mod_time";
 type SortDir = "asc" | "desc";
 
 interface UseFileSystemReturn {
-  /** Current directory path */
   currentPath: string;
-  /** Directory entries */
   entries: FileEntry[];
-  /** Loading state */
   loading: boolean;
-  /** Error message, if any */
   error: string | null;
-  /** Navigate to an absolute path */
   navigateTo: (path: string) => void;
-  /** Navigate up one directory */
   goUp: () => void;
-  /** Navigate to root */
   goToRoot: () => void;
-  /** Refresh current listing */
   refresh: () => void;
-  /** Current sort key */
   sortKey: SortKey;
-  /** Current sort direction */
   sortDir: SortDir;
-  /** Change sort */
   setSort: (key: SortKey) => void;
+  showDotfiles: boolean;
+  setShowDotfiles: (show: boolean) => void;
 }
 
 function sortEntries(entries: FileEntry[], key: SortKey, dir: SortDir): FileEntry[] {
@@ -62,6 +53,7 @@ export function useFileSystem(initialPath = "/"): UseFileSystemReturn {
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [showDotfiles, setShowDotfiles] = useState(false);
 
   const fetchDirectory = useCallback((path: string) => {
     setLoading(true);
@@ -123,7 +115,10 @@ export function useFileSystem(initialPath = "/"): UseFileSystemReturn {
     [sortKey]
   );
 
-  const entries = sortEntries(rawEntries, sortKey, sortDir);
+  const filtered = showDotfiles
+    ? rawEntries
+    : rawEntries.filter((e) => !e.name.startsWith("."));
+  const entries = sortEntries(filtered, sortKey, sortDir);
 
   return {
     currentPath,
@@ -137,5 +132,7 @@ export function useFileSystem(initialPath = "/"): UseFileSystemReturn {
     sortKey,
     sortDir,
     setSort,
+    showDotfiles,
+    setShowDotfiles,
   };
 }
