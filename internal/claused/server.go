@@ -17,13 +17,15 @@ import (
 // Server is the main HTTP/WebSocket server for claused.
 type Server struct {
 	anthropic  *AnthropicClient
+	ollama     *OllamaClient
 	router     *Router
 	sessions   *SessionStore
 	mcpManager *MCPManager
 	upgrader   websocket.Upgrader
 	logger     *slog.Logger
 	system     string
-	tools      []any // Tool definitions for Claude
+	tools      []any         // Tool definitions for Claude
+	ollamaTools []ollamaTool // Tool definitions for Ollama
 }
 
 // NewServer creates a new claused HTTP server.
@@ -79,7 +81,13 @@ func (s *Server) BuildTools() []any {
 
 	s.logger.Info("built tool definitions", "count", len(tools))
 	s.tools = tools
+	s.ollamaTools = ConvertToolsForOllama(tools)
 	return tools
+}
+
+// SetOllama sets the Ollama client on the server.
+func (s *Server) SetOllama(client *OllamaClient) {
+	s.ollama = client
 }
 
 // SetupRoutes registers HTTP handlers.
@@ -152,10 +160,14 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		case BackendCloud:
 			s.handleCloudMessage(conn, session)
 		case BackendLocal:
-			s.sendMessage(conn, ChatMessage{
-				Type:    "error",
-				Content: "Local model backend not yet implemented",
-			})
+			if s.ollama == nil {
+				s.sendMessage(conn, ChatMessage{
+					Type:    "error",
+					Content: "Ollama not configured. Install Ollama and set ollama.enabled=true in config.",
+				})
+			} else {
+				s.handleLocalMessage(conn, session)
+			}
 		}
 
 		// Signal to the UI that the response is complete
@@ -289,6 +301,97 @@ func (s *Server) handleCloudMessage(conn *websocket.Conn, session *Session) {
 	}
 
 	s.logger.Warn("hit max agentic loop iterations")
+}
+
+func (s *Server) handleLocalMessage(conn *websocket.Conn, session *Session) {
+	messages := session.GetMessages()
+	ollamaMessages := ConvertMessagesForOllama(messages)
+
+	s.logger.Info("sending to ollama", "message_count", len(ollamaMessages))
+
+	// Try with tools first, fall back to no tools if the model doesn't support them
+	resp, err := s.ollama.Chat(s.system, ollamaMessages, s.ollamaTools)
+	if err != nil {
+		s.logger.Error("ollama request failed", "error", err)
+
+		// Try streaming without tools as fallback
+		stream, streamErr := s.ollama.StreamChat(s.system, ollamaMessages)
+		if streamErr != nil {
+			s.sendMessage(conn, ChatMessage{
+				Type:    "error",
+				Content: fmt.Sprintf("Ollama error: %v", err),
+			})
+			return
+		}
+		defer stream.Close()
+
+		var fullResponse string
+		ParseOllamaStream(stream, func(text string, done bool) {
+			if text != "" {
+				fullResponse += text
+				s.sendMessage(conn, ChatMessage{
+					Type:    "assistant",
+					Content: text,
+					Model:   s.ollama.model,
+				})
+			}
+		})
+		session.AddMessage(Message{Role: "assistant", Content: fullResponse})
+		return
+	}
+
+	// Handle tool calls from Ollama
+	if len(resp.Message.ToolCalls) > 0 {
+		for _, tc := range resp.Message.ToolCalls {
+			toolName := tc.Function.Name
+			s.logger.Info("ollama tool call", "tool", toolName)
+
+			inputJSON, _ := json.Marshal(tc.Function.Arguments)
+			s.sendMessage(conn, ChatMessage{
+				Type:     "tool_use",
+				ToolName: toolName,
+				Content:  string(inputJSON),
+			})
+
+			result := s.executeTool(toolName, "", inputJSON)
+			s.sendMessage(conn, ChatMessage{
+				Type:     "tool_result",
+				ToolName: toolName,
+				Content:  result,
+			})
+
+			// Add tool result as context and ask Ollama to summarize
+			ollamaMessages = append(ollamaMessages, ollamaChatMessage{
+				Role:    "assistant",
+				Content: fmt.Sprintf("I called %s and got: %s", toolName, result),
+			})
+		}
+
+		// Follow up call for Ollama to summarize
+		followUp, err := s.ollama.Chat(s.system, append(ollamaMessages, ollamaChatMessage{
+			Role:    "user",
+			Content: "Now summarize the tool results in a clear, concise response.",
+		}), nil)
+		if err == nil && followUp.Message.Content != "" {
+			s.sendMessage(conn, ChatMessage{
+				Type:    "assistant",
+				Content: followUp.Message.Content,
+				Model:   s.ollama.model,
+			})
+			session.AddMessage(Message{Role: "assistant", Content: followUp.Message.Content})
+		}
+		return
+	}
+
+	// Simple text response
+	if resp.Message.Content != "" {
+		s.sendMessage(conn, ChatMessage{
+			Type:    "assistant",
+			Content: resp.Message.Content,
+			Model:   s.ollama.model,
+		})
+		session.AddMessage(Message{Role: "assistant", Content: resp.Message.Content})
+	}
 }
 
 // executeTool routes a tool call to the appropriate MCP server.

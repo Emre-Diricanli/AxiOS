@@ -15,13 +15,17 @@ anthropic:
   model: "claude-sonnet-4-6"
 
 ollama:
-  enabled: false
+  enabled: true
   host: "localhost"
   port: 11434
   model: "llama3.1:8b"
 
 routing:
-  mode: "auto"  # auto, cloud_only, local_only, cost_aware
+  # auto: use cloud when available, fallback to local
+  # cloud_only: only use Anthropic API
+  # local_only: only use Ollama (no data leaves the machine)
+  # cost_aware: track API spend, shift to local when budget depletes
+  mode: "auto"
 
 mcp:
   socket_dir: "/tmp/axios-mcp"
