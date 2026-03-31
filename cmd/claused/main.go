@@ -91,6 +91,45 @@ func main() {
 		server.SetOllama(ollamaClient)
 	}
 
+	// Initialize host store with a callback that updates the server's Ollama client
+	hostsFilePath := "/tmp/axios-hosts.json"
+	hostStore := claused.NewHostStore(func(client *claused.OllamaClient) {
+		server.SetOllama(client)
+		router.SetLocalAvailable(true)
+		logger.Info("Ollama host switched", "url", client.BaseURL())
+	})
+
+	// Add the local host from config
+	localHost, err := hostStore.AddHost("Local", cfg.Ollama.Host, cfg.Ollama.Port)
+	if err != nil {
+		logger.Warn("failed to add local Ollama host", "error", err)
+	} else {
+		logger.Info("local Ollama host registered", "status", localHost.Status)
+	}
+
+	// Load saved hosts from file (adds any previously saved remote hosts)
+	if err := hostStore.LoadFromFile(hostsFilePath); err != nil {
+		logger.Warn("failed to load saved hosts", "error", err)
+	}
+
+	// Set the local host as active if Ollama is enabled and reachable
+	if ollamaEnabled && localHost != nil && localHost.Status == "online" {
+		if err := hostStore.SetActive("local"); err != nil {
+			logger.Warn("failed to set local host as active", "error", err)
+		}
+	}
+
+	// Save hosts on shutdown
+	defer func() {
+		if err := hostStore.SaveToFile(hostsFilePath); err != nil {
+			logger.Error("failed to save hosts", "error", err)
+		} else {
+			logger.Info("hosts saved", "path", hostsFilePath)
+		}
+	}()
+
+	server.SetHostStore(hostStore)
+
 	server.BuildTools()
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 

@@ -21,6 +21,7 @@ type Server struct {
 	router     *Router
 	sessions   *SessionStore
 	mcpManager *MCPManager
+	hostStore  *HostStore
 	upgrader   websocket.Upgrader
 	logger     *slog.Logger
 	system     string
@@ -116,6 +117,11 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/models/pull", s.handleModelPull)
 	mux.HandleFunc("/api/models/delete", s.handleModelDelete)
 	mux.HandleFunc("/api/models/info", s.handleModelInfo)
+
+	// Ollama host management
+	mux.HandleFunc("/api/hosts", s.handleHosts)
+	mux.HandleFunc("/api/hosts/activate", s.handleHostAction)
+	mux.HandleFunc("/api/hosts/health", s.handleHostHealth)
 
 	// Docker management
 	mux.HandleFunc("/api/docker/containers", s.handleDockerContainers)
