@@ -119,7 +119,26 @@ function ProviderCard({
             <h4 className="text-sm font-bold text-foreground truncate">
               {provider.name}
             </h4>
-            <span className="text-[10px] text-muted-foreground">
+            <a
+              href={
+                provider.id === "anthropic" ? "https://console.anthropic.com" :
+                provider.id === "openai" ? "https://platform.openai.com/api-keys" :
+                provider.id === "google" ? "https://aistudio.google.com/apikey" :
+                provider.id === "mistral" ? "https://console.mistral.ai/api-keys" :
+                provider.id === "groq" ? "https://console.groq.com/keys" :
+                provider.id === "together" ? "https://api.together.ai/settings/api-keys" :
+                provider.id === "openrouter" ? "https://openrouter.ai/keys" :
+                provider.id === "deepseek" ? "https://platform.deepseek.com/api_keys" :
+                provider.id === "xai" ? "https://console.x.ai" :
+                provider.id === "cohere" ? "https://dashboard.cohere.com/api-keys" :
+                provider.id === "perplexity" ? "https://www.perplexity.ai/settings/api" :
+                "#"
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-muted-foreground hover:text-primary transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
               {provider.id === "anthropic" ? "anthropic.com" :
                provider.id === "openai" ? "openai.com" :
                provider.id === "google" ? "ai.google.dev" :
@@ -132,7 +151,7 @@ function ProviderCard({
                provider.id === "cohere" ? "cohere.com" :
                provider.id === "perplexity" ? "perplexity.ai" :
                "Cloud API"}
-            </span>
+            </a>
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
