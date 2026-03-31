@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/axios-os/axios/internal/claused"
 	"github.com/axios-os/axios/internal/config"
@@ -148,22 +150,28 @@ func main() {
 		}
 	}
 
-	// Save hosts on shutdown
-	defer func() {
+	// Save state to disk
+	saveAll := func() {
 		if err := hostStore.SaveToFile(hostsFilePath); err != nil {
 			logger.Error("failed to save hosts", "error", err)
 		} else {
 			logger.Info("hosts saved", "path", hostsFilePath)
 		}
-	}()
-
-	// Save providers on shutdown
-	defer func() {
 		if err := providerStore.SaveToFile(); err != nil {
 			logger.Error("failed to save providers", "error", err)
 		} else {
 			logger.Info("providers saved", "path", providersFilePath)
 		}
+	}
+
+	// Handle shutdown signals — save state before exit
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		logger.Info("shutdown signal received, saving state...")
+		saveAll()
+		os.Exit(0)
 	}()
 
 	server.SetHostStore(hostStore)
@@ -180,6 +188,7 @@ func main() {
 
 	if err := server.ListenAndServe(addr); err != nil {
 		logger.Error("server failed", "error", err)
+		saveAll()
 		os.Exit(1)
 	}
 }
