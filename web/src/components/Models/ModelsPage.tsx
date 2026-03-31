@@ -185,17 +185,22 @@ function MarketplaceCard({
       {/* Tag selector + Install */}
       <div className="flex items-center gap-2 mt-auto pt-1">
         {(model.tags ?? []).length > 1 && (
-          <select
-            value={selectedTag}
-            onChange={(e) => setSelectedTag(e.target.value)}
-            className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-[11px] font-mono bg-secondary text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer"
-          >
-            {(model.tags ?? []).map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
+          <div className="relative flex-1 min-w-0">
+            <select
+              value={selectedTag}
+              onChange={(e) => setSelectedTag(e.target.value)}
+              className="w-full px-2 py-1.5 pr-7 rounded-lg text-[11px] font-mono bg-secondary text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer"
+            >
+              {(model.tags ?? []).map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+            <svg className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </div>
         )}
         {(model.tags ?? []).length <= 1 && (
           <span className="flex-1 text-[11px] font-mono text-muted-foreground">
