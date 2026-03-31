@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useModelMarketplace } from "@/hooks/useModelMarketplace";
 import type { InstalledModel, MarketplaceModel } from "@/types/models";
 import { HostsPanel } from "@/components/Models/HostsPanel";
+import { ProvidersPanel } from "@/components/Models/ProvidersPanel";
 
 /* ── Helpers ─────────────────────────────────────────────── */
 
@@ -342,6 +343,9 @@ export function ModelsPage() {
 
       {/* ── Section 0: Compute Nodes ──────────────────────────── */}
       <HostsPanel />
+
+      {/* ── Section 0.5: Cloud Providers ───────────────────────── */}
+      <ProvidersPanel />
 
       {/* ── Section 1: Installed Models ───────────────────────── */}
       <div>

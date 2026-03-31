@@ -16,17 +16,19 @@ import (
 
 // Server is the main HTTP/WebSocket server for claused.
 type Server struct {
-	anthropic  *AnthropicClient
-	ollama     *OllamaClient
-	router     *Router
-	sessions   *SessionStore
-	mcpManager *MCPManager
-	hostStore  *HostStore
-	upgrader   websocket.Upgrader
-	logger     *slog.Logger
-	system     string
-	tools      []any         // Tool definitions for Claude
-	ollamaTools []ollamaTool // Tool definitions for Ollama
+	anthropic     *AnthropicClient
+	ollama        *OllamaClient
+	openaiClient  *OpenAIClient
+	providerStore *ProviderStore
+	router        *Router
+	sessions      *SessionStore
+	mcpManager    *MCPManager
+	hostStore     *HostStore
+	upgrader      websocket.Upgrader
+	logger        *slog.Logger
+	system        string
+	tools         []any         // Tool definitions for Claude
+	ollamaTools   []ollamaTool  // Tool definitions for Ollama
 }
 
 // NewServer creates a new claused HTTP server.
@@ -122,6 +124,11 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/hosts", s.handleHosts)
 	mux.HandleFunc("/api/hosts/activate", s.handleHostAction)
 	mux.HandleFunc("/api/hosts/health", s.handleHostHealth)
+
+	// Cloud provider management
+	mux.HandleFunc("/api/providers", s.handleProviders)
+	mux.HandleFunc("/api/providers/key", s.handleProviderKey)
+	mux.HandleFunc("/api/providers/activate", s.handleProviderActivate)
 
 	// Docker management
 	mux.HandleFunc("/api/docker/containers", s.handleDockerContainers)
@@ -283,6 +290,14 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		switch backend {
 		case BackendCloud:
+			// Check if we should use an OpenAI-compatible provider
+			if s.openaiClient != nil && s.providerStore != nil {
+				active := s.providerStore.GetActive()
+				if active != nil && active.Compatible == "openai" {
+					s.handleOpenAICloudMessage(conn, session)
+					break
+				}
+			}
 			s.handleCloudMessage(conn, session)
 		case BackendLocal:
 			if s.ollama == nil {
