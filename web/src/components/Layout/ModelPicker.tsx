@@ -16,12 +16,21 @@ export function ModelPicker() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [providersRes, ollamaRes] = await Promise.all([
+      const [providersRes, installedRes, currentRes] = await Promise.all([
         fetch("/api/providers"),
-        fetch("/api/models"),
+        fetch("/api/models/installed"),
+        fetch("/api/models/current"),
       ]);
 
       const all: PickerModel[] = [];
+      let currentModel = "";
+      let currentBackend = "";
+
+      if (currentRes.ok) {
+        const cur = await currentRes.json();
+        currentModel = cur.model ?? "";
+        currentBackend = cur.backend ?? "";
+      }
 
       // Cloud providers
       if (providersRes.ok) {
@@ -34,22 +43,22 @@ export function ModelPicker() {
               provider: p.id,
               providerName: p.name,
               backend: "cloud",
-              active: p.active && m === (pData.active_model ?? ""),
+              active: currentBackend === "cloud" && p.active && m === currentModel,
             });
           }
         }
       }
 
-      // Local models
-      if (ollamaRes.ok) {
-        const oData = await ollamaRes.json();
-        for (const m of oData.models ?? []) {
+      // Local Ollama models
+      if (installedRes.ok) {
+        const iData = await installedRes.json();
+        for (const m of iData.models ?? []) {
           all.push({
             name: m.name,
             provider: "ollama",
             providerName: "Ollama (local)",
             backend: "local",
-            active: m.active ?? false,
+            active: currentBackend === "local" && m.name === currentModel,
           });
         }
       }
