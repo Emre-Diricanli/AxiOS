@@ -201,14 +201,30 @@ func (s *Server) handleCurrentModel(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	backend := s.router.Route()
 	model := ""
-	if backend == BackendCloud && s.anthropic != nil {
-		model = s.anthropic.model
+	providerName := ""
+
+	if backend == BackendCloud {
+		// Check provider store first (has Google, OpenAI, etc.)
+		if s.providerStore != nil {
+			if active := s.providerStore.GetActive(); active != nil {
+				model = s.providerStore.GetActiveModel()
+				providerName = active.Name
+			}
+		}
+		// Fallback to anthropic client
+		if model == "" && s.anthropic != nil {
+			model = s.anthropic.model
+			providerName = "Anthropic"
+		}
 	} else if backend == BackendLocal && s.ollama != nil {
 		model = s.ollama.model
+		providerName = "Ollama"
 	}
+
 	json.NewEncoder(w).Encode(map[string]any{
-		"model":   model,
-		"backend": string(backend),
+		"model":    model,
+		"backend":  string(backend),
+		"provider": providerName,
 	})
 }
 
