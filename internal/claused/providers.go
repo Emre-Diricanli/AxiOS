@@ -616,9 +616,19 @@ func (s *Server) handleOpenAICloudMessage(conn interface{ WriteJSON(v any) error
 
 		if resp.StatusCode != http.StatusOK {
 			s.logger.Error("openai-compatible API error", "status", resp.StatusCode, "body", string(body))
+			// Try to extract a clean error message
+			errMsg := fmt.Sprintf("API error %d", resp.StatusCode)
+			var errResp struct {
+				Error struct {
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			if json.Unmarshal(body, &errResp) == nil && errResp.Error.Message != "" {
+				errMsg = errResp.Error.Message
+			}
 			s.sendWSMessage(conn, ChatMessage{
 				Type:    "error",
-				Content: fmt.Sprintf("API error %d: %s", resp.StatusCode, string(body)),
+				Content: errMsg,
 			})
 			return
 		}
