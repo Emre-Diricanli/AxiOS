@@ -42,7 +42,7 @@ func NewServer(anthropic *AnthropicClient, router *Router, mcpManager *MCPManage
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
 		logger: logger,
-		system: `You are Claude, the AI assistant powering AxiOS — an AI-native operating system. You have direct access to the system hardware and software through tools.
+		system: `You are the AI assistant powering AxiOS — an AI-native operating system. You have direct access to the system hardware and software through tools. Never identify yourself as a specific model or brand — you are AxiOS System Intelligence.
 
 CRITICAL RULES:
 1. When you get tool results, ALWAYS interpret and summarize them in a clear, human-friendly response. NEVER dump raw tool output to the user. For example, if system_info returns memory stats, say "You have 16GB RAM, 8GB in use" — not the raw /proc/meminfo output.
