@@ -86,7 +86,15 @@ func main() {
 	}
 
 	// Initialize provider store
-	providersFilePath := "/tmp/axios-providers.json"
+	// Store data files in a persistent location (not /tmp which gets cleared)
+	dataDir := os.Getenv("AXIOS_DATA_DIR")
+	if dataDir == "" {
+		homeDir, _ := os.UserHomeDir()
+		dataDir = homeDir + "/.axios"
+	}
+	os.MkdirAll(dataDir, 0755)
+
+	providersFilePath := dataDir + "/providers.json"
 	providerStore := claused.NewProviderStore(providersFilePath)
 	if err := providerStore.LoadFromFile(); err != nil {
 		logger.Warn("failed to load saved providers", "error", err)
@@ -113,7 +121,7 @@ func main() {
 	}
 
 	// Initialize host store with a callback that updates the server's Ollama client
-	hostsFilePath := "/tmp/axios-hosts.json"
+	hostsFilePath := dataDir + "/hosts.json"
 	hostStore := claused.NewHostStore(func(client *claused.OllamaClient) {
 		server.SetOllama(client)
 		router.SetLocalAvailable(true)

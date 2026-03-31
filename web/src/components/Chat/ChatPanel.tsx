@@ -24,7 +24,6 @@ export function ChatPanel() {
 
   const onMessage = useCallback((msg: ChatMessage) => {
     if (msg.type === "assistant") {
-      if (msg.model) setActiveModel(msg.model);
       streamBufferRef.current += msg.content;
       setMessages((prev) => {
         const last = prev[prev.length - 1];
