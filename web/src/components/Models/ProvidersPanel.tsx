@@ -147,7 +147,7 @@ function ProviderCard({
               onChange={(e) => setSelectedModel(e.target.value)}
               className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-[11px] font-mono bg-secondary text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer"
             >
-              {provider.models.map((m) => (
+              {(provider.models ?? []).map((m) => (
                 <option key={m} value={m}>
                   {m}
                 </option>

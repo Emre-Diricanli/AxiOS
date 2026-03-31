@@ -184,20 +184,20 @@ function MarketplaceCard({
 
       {/* Tag selector + Install */}
       <div className="flex items-center gap-2 mt-auto pt-1">
-        {model.tags.length > 1 && (
+        {(model.tags ?? []).length > 1 && (
           <select
             value={selectedTag}
             onChange={(e) => setSelectedTag(e.target.value)}
             className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-[11px] font-mono bg-secondary text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer"
           >
-            {model.tags.map((tag) => (
+            {(model.tags ?? []).map((tag) => (
               <option key={tag} value={tag}>
                 {tag}
               </option>
             ))}
           </select>
         )}
-        {model.tags.length <= 1 && (
+        {(model.tags ?? []).length <= 1 && (
           <span className="flex-1 text-[11px] font-mono text-muted-foreground">
             {selectedTag}
           </span>

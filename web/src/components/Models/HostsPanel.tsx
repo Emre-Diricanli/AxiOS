@@ -72,7 +72,7 @@ function HostCard({
           {host.host}:{host.port}
         </span>
         <span className="text-[10px] text-muted-foreground">
-          {host.models.length} model{host.models.length !== 1 ? "s" : ""}
+          {(host.models ?? []).length} model{(host.models ?? []).length !== 1 ? "s" : ""}
         </span>
         {host.gpu_info && (
           <span className="px-2 py-0.5 rounded-md text-[10px] bg-secondary text-muted-foreground">

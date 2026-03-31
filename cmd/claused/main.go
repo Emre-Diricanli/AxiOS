@@ -85,8 +85,29 @@ func main() {
 		}
 	}
 
+	// Initialize provider store
+	providersFilePath := "/tmp/axios-providers.json"
+	providerStore := claused.NewProviderStore(providersFilePath)
+	if err := providerStore.LoadFromFile(); err != nil {
+		logger.Warn("failed to load saved providers", "error", err)
+	}
+
+	// If Anthropic credentials exist from env/config, auto-set them on the "anthropic" provider
+	if hasCloudAuth {
+		if err := providerStore.SetAPIKey("anthropic", token); err != nil {
+			logger.Warn("failed to set anthropic key on provider store", "error", err)
+		}
+		// Set anthropic as active if no other provider is already active
+		if providerStore.GetActive() == nil {
+			if err := providerStore.SetActive("anthropic", cfg.Anthropic.Model); err != nil {
+				logger.Warn("failed to set anthropic as active provider", "error", err)
+			}
+		}
+	}
+
 	// Start HTTP/WebSocket server
 	server := claused.NewServer(anthropic, router, mcpManager, logger)
+	server.SetProviderStore(providerStore)
 	if ollamaClient != nil {
 		server.SetOllama(ollamaClient)
 	}
@@ -125,6 +146,15 @@ func main() {
 			logger.Error("failed to save hosts", "error", err)
 		} else {
 			logger.Info("hosts saved", "path", hostsFilePath)
+		}
+	}()
+
+	// Save providers on shutdown
+	defer func() {
+		if err := providerStore.SaveToFile(); err != nil {
+			logger.Error("failed to save providers", "error", err)
+		} else {
+			logger.Info("providers saved", "path", providersFilePath)
 		}
 	}()
 
