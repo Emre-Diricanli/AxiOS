@@ -25,6 +25,11 @@ func NewOllamaClient(host string, port int, model string) *OllamaClient {
 	}
 }
 
+// BaseURL returns the Ollama server base URL.
+func (c *OllamaClient) BaseURL() string {
+	return c.baseURL
+}
+
 // ollamaChatRequest is the request body for Ollama's /api/chat endpoint.
 type ollamaChatRequest struct {
 	Model    string              `json:"model"`

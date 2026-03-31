@@ -110,6 +110,13 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/fs/read", s.handleFSRead)
 	mux.HandleFunc("/api/fs/info", s.handleFSInfo)
 
+	// Model marketplace
+	mux.HandleFunc("/api/models/installed", s.handleModelsInstalled)
+	mux.HandleFunc("/api/models/marketplace", s.handleModelsMarketplace)
+	mux.HandleFunc("/api/models/pull", s.handleModelPull)
+	mux.HandleFunc("/api/models/delete", s.handleModelDelete)
+	mux.HandleFunc("/api/models/info", s.handleModelInfo)
+
 	// Docker management
 	mux.HandleFunc("/api/docker/containers", s.handleDockerContainers)
 	mux.HandleFunc("/api/docker/containers/inspect", s.handleDockerContainer)
