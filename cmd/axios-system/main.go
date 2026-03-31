@@ -276,20 +276,46 @@ func getMemInfo() string {
 		}
 	}
 
-	// macOS fallback using sysctl
+	// macOS: compute human-readable memory stats
 	if runtime.GOOS == "darwin" {
 		var info strings.Builder
 
-		memSize, err := exec.Command("sysctl", "-n", "hw.memsize").Output()
+		// Total memory
+		memSizeOut, err := exec.Command("sysctl", "-n", "hw.memsize").Output()
 		if err == nil {
-			memStr := strings.TrimSpace(string(memSize))
-			fmt.Fprintf(&info, "Total Memory (bytes): %s\n", memStr)
-		}
+			memStr := strings.TrimSpace(string(memSizeOut))
+			totalBytes := int64(0)
+			fmt.Sscanf(memStr, "%d", &totalBytes)
+			totalGB := float64(totalBytes) / (1024 * 1024 * 1024)
+			fmt.Fprintf(&info, "Total Memory: %.1f GB\n", totalGB)
 
-		// Get memory pressure summary via vm_stat
-		vmStat, err := exec.Command("vm_stat").Output()
-		if err == nil {
-			fmt.Fprintf(&info, "\n%s", string(vmStat))
+			// Parse vm_stat for used memory
+			vmStat, err := exec.Command("vm_stat").Output()
+			if err == nil {
+				lines := strings.Split(string(vmStat), "\n")
+				pageSize := int64(16384) // default on Apple Silicon
+				var active, wired, compressed int64
+				for _, line := range lines {
+					if strings.Contains(line, "page size of") {
+						fmt.Sscanf(line, "Mach Virtual Memory Statistics: (page size of %d bytes)", &pageSize)
+					}
+					if strings.HasPrefix(line, "Pages active:") {
+						fmt.Sscanf(strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "Pages active:"), ".")), "%d", &active)
+					}
+					if strings.HasPrefix(line, "Pages wired down:") {
+						fmt.Sscanf(strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "Pages wired down:"), ".")), "%d", &wired)
+					}
+					if strings.HasPrefix(line, "Pages occupied by compressor:") {
+						fmt.Sscanf(strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "Pages occupied by compressor:"), ".")), "%d", &compressed)
+					}
+				}
+				usedBytes := (active + wired + compressed) * pageSize
+				usedGB := float64(usedBytes) / (1024 * 1024 * 1024)
+				freeGB := totalGB - usedGB
+				pct := (usedGB / totalGB) * 100
+				fmt.Fprintf(&info, "Used Memory: %.1f GB (%.0f%%)\n", usedGB, pct)
+				fmt.Fprintf(&info, "Available Memory: %.1f GB\n", freeGB)
+			}
 		}
 
 		if info.Len() > 0 {
