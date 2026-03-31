@@ -88,3 +88,114 @@
     display: none;
   }
 }
+
+/* Markdown styling for chat messages */
+.prose-axios {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-foreground);
+  word-break: break-word;
+
+  & h1, & h2, & h3 {
+    font-weight: 600;
+    margin-top: 0.8em;
+    margin-bottom: 0.4em;
+    color: var(--color-foreground);
+  }
+  & h1 { font-size: 1.2em; }
+  & h2 { font-size: 1.1em; }
+  & h3 { font-size: 1em; }
+
+  & p {
+    margin: 0.4em 0;
+  }
+
+  & strong {
+    font-weight: 600;
+    color: var(--color-foreground);
+  }
+
+  & em {
+    font-style: italic;
+  }
+
+  & code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.9em;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    color: #c4b5fd;
+  }
+
+  & pre {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 0.75em 1em;
+    overflow-x: auto;
+    margin: 0.5em 0;
+    font-size: 0.85em;
+  }
+  & pre code {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    color: #d4d4d8;
+  }
+
+  & ul, & ol {
+    padding-left: 1.2em;
+    margin: 0.4em 0;
+  }
+  & li {
+    margin: 0.2em 0;
+  }
+  & ul { list-style: disc; }
+  & ol { list-style: decimal; }
+
+  & table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    font-size: 0.9em;
+  }
+  & th, & td {
+    padding: 0.4em 0.6em;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: left;
+  }
+  & th {
+    background: rgba(255, 255, 255, 0.05);
+    font-weight: 600;
+    color: var(--color-foreground);
+  }
+  & td {
+    color: rgba(228, 228, 236, 0.8);
+  }
+  & tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  & blockquote {
+    border-left: 3px solid var(--color-primary);
+    padding-left: 0.8em;
+    margin: 0.5em 0;
+    color: rgba(228, 228, 236, 0.7);
+  }
+
+  & hr {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin: 0.8em 0;
+  }
+
+  & a {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  & *:first-child { margin-top: 0; }
+  & *:last-child { margin-bottom: 0; }
+}
