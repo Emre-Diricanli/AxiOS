@@ -83,12 +83,17 @@ export function ChatPanel() {
     [send]
   );
 
-  // Fetch active model on mount
+  // Fetch active model on mount + poll every 3s for changes
   useEffect(() => {
-    fetch("/api/models/current")
-      .then((r) => r.json())
-      .then((d) => { if (d.model) setActiveModel(d.model); })
-      .catch(() => {});
+    const fetchModel = () => {
+      fetch("/api/models/current")
+        .then((r) => r.json())
+        .then((d) => { if (d.model) setActiveModel(d.model); })
+        .catch(() => {});
+    };
+    fetchModel();
+    const id = setInterval(fetchModel, 3000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -126,7 +131,7 @@ export function ChatPanel() {
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-foreground/70 mb-1">Ask Claude anything</p>
+              <p className="text-sm font-medium text-foreground/70 mb-1">Ask {activeModel ?? "AxiOS"} anything</p>
               <p className="text-xs text-muted-foreground">System commands, file management, and more</p>
             </div>
           </div>
