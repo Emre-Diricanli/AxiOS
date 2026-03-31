@@ -3,9 +3,10 @@ import { useState, type FormEvent, type KeyboardEvent } from "react";
 interface InputBarProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  modelName?: string;
 }
 
-export function InputBar({ onSend, disabled }: InputBarProps) {
+export function InputBar({ onSend, disabled, modelName }: InputBarProps) {
   const [input, setInput] = useState("");
 
   const handleSubmit = (e: FormEvent) => {
@@ -29,7 +30,7 @@ export function InputBar({ onSend, disabled }: InputBarProps) {
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Message Claude..."
+        placeholder={`Message ${modelName ?? "AxiOS"}...`}
         disabled={disabled}
         rows={1}
         className="flex-1 resize-none rounded-xl glass-subtle px-3.5 py-2.5 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/30 disabled:opacity-30 transition-all"

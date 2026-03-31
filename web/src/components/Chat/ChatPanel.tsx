@@ -18,11 +18,13 @@ const SESSION_ID = "default";
 export function ChatPanel() {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [activeModel, setActiveModel] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamBufferRef = useRef("");
 
   const onMessage = useCallback((msg: ChatMessage) => {
     if (msg.type === "assistant") {
+      if (msg.model) setActiveModel(msg.model);
       streamBufferRef.current += msg.content;
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -81,6 +83,14 @@ export function ChatPanel() {
     [send]
   );
 
+  // Fetch active model on mount
+  useEffect(() => {
+    fetch("/api/models/current")
+      .then((r) => r.json())
+      .then((d) => { if (d.model) setActiveModel(d.model); })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -97,7 +107,7 @@ export function ChatPanel() {
           </div>
           <div>
             <span className="text-sm font-semibold">Axi<span className="text-primary">OS</span></span>
-            <p className="text-[10px] text-muted-foreground">System Intelligence</p>
+            <p className="text-[10px] text-muted-foreground">{activeModel ?? "System Intelligence"}</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-full glass-subtle">
@@ -131,7 +141,7 @@ export function ChatPanel() {
       </div>
 
       {/* Input */}
-      <InputBar onSend={handleSend} disabled={!connected || streaming} />
+      <InputBar onSend={handleSend} disabled={!connected || streaming} modelName={activeModel ?? undefined} />
     </div>
   );
 }
