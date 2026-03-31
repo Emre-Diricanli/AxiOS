@@ -119,8 +119,19 @@ function ProviderCard({
             <h4 className="text-sm font-bold text-foreground truncate">
               {provider.name}
             </h4>
-            <span className="text-[10px] text-muted-foreground font-mono">
-              {provider.compatible}
+            <span className="text-[10px] text-muted-foreground">
+              {provider.id === "anthropic" ? "anthropic.com" :
+               provider.id === "openai" ? "openai.com" :
+               provider.id === "google" ? "ai.google.dev" :
+               provider.id === "mistral" ? "mistral.ai" :
+               provider.id === "groq" ? "groq.com" :
+               provider.id === "together" ? "together.ai" :
+               provider.id === "openrouter" ? "openrouter.ai" :
+               provider.id === "deepseek" ? "deepseek.com" :
+               provider.id === "xai" ? "x.ai" :
+               provider.id === "cohere" ? "cohere.com" :
+               provider.id === "perplexity" ? "perplexity.ai" :
+               "Cloud API"}
             </span>
           </div>
         </div>
