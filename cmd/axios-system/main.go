@@ -335,13 +335,50 @@ func handleDiskUsage(params map[string]any) (string, error) {
 	return string(out), nil
 }
 
-// handleProcessList runs ps aux and returns the output.
+// handleProcessList returns top processes sorted by memory usage.
 func handleProcessList(params map[string]any) (string, error) {
-	out, err := exec.Command("ps", "aux").Output()
+	// Sort by memory, limit to top 15 to keep output manageable
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" {
+		cmd = exec.Command("bash", "-c", "ps aux --sort=-%mem 2>/dev/null || ps aux | sort -nrk 4 | head -16")
+	} else {
+		cmd = exec.Command("bash", "-c", "ps aux --sort=-%mem | head -16")
+	}
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to list processes: %w", err)
 	}
-	return string(out), nil
+
+	// Parse into a clean summary
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) <= 1 {
+		return "No processes found", nil
+	}
+
+	var result strings.Builder
+	result.WriteString("Top 15 processes by memory usage:\n\n")
+	result.WriteString(fmt.Sprintf("%-20s %6s %6s %s\n", "COMMAND", "%CPU", "%MEM", "RSS"))
+	result.WriteString(strings.Repeat("-", 50) + "\n")
+
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) < 11 {
+			continue
+		}
+		cpu := fields[2]
+		mem := fields[3]
+		rss := fields[5]
+		command := fields[10]
+		// Shorten long command paths
+		parts := strings.Split(command, "/")
+		shortCmd := parts[len(parts)-1]
+		if len(shortCmd) > 20 {
+			shortCmd = shortCmd[:20]
+		}
+		result.WriteString(fmt.Sprintf("%-20s %6s %6s %s\n", shortCmd, cpu, mem, rss))
+	}
+
+	return result.String(), nil
 }
 
 // handleServiceStatus checks systemd service status.
