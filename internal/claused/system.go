@@ -606,8 +606,11 @@ func getNetworkStats(hostname string) NetStats {
 
 	var interfaces []NetInterface
 	for _, iface := range ifaces {
-		// Skip loopback
+		// Skip loopback and down interfaces
 		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if iface.Flags&net.FlagUp == 0 {
 			continue
 		}
 
@@ -632,6 +635,11 @@ func getNetworkStats(hostname string) NetStats {
 					ip = ipNet.IP.String()
 				}
 			}
+		}
+
+		// Skip interfaces with no IP address (virtual/tunnel with no connectivity)
+		if ip == "" {
+			continue
 		}
 
 		interfaces = append(interfaces, NetInterface{
