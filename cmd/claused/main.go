@@ -143,11 +143,36 @@ func main() {
 		logger.Warn("failed to load saved hosts", "error", err)
 	}
 
-	// Set the local host as active if Ollama is enabled and reachable
-	if ollamaEnabled && localHost != nil && localHost.Status == "online" {
-		if err := hostStore.SetActive("local"); err != nil {
-			logger.Warn("failed to set local host as active", "error", err)
+	// Re-activate the previously active host, or fall back to any online host
+	hostStore.CheckAllHealth()
+	activated := false
+
+	// Try to restore the saved active host
+	for _, h := range hostStore.GetHosts() {
+		if h.Active && h.Status == "online" {
+			if err := hostStore.SetActive(h.ID); err == nil {
+				logger.Info("restored active Ollama host", "id", h.ID, "host", h.Host)
+				activated = true
+			}
+			break
 		}
+	}
+
+	// If saved active host is offline, try any online host
+	if !activated {
+		for _, h := range hostStore.GetHosts() {
+			if h.Status == "online" {
+				if err := hostStore.SetActive(h.ID); err == nil {
+					logger.Info("activated first online Ollama host", "id", h.ID, "host", h.Host)
+					activated = true
+				}
+				break
+			}
+		}
+	}
+
+	if !activated {
+		logger.Warn("no Ollama hosts are online")
 	}
 
 	// Save state to disk
