@@ -140,6 +140,7 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/fs/list", s.handleFSList)
 	mux.HandleFunc("/api/fs/read", s.handleFSRead)
 	mux.HandleFunc("/api/fs/write", s.handleFSWrite)
+	mux.HandleFunc("/api/fs/raw", s.handleFSRaw)
 	mux.HandleFunc("/api/fs/info", s.handleFSInfo)
 
 	// Model marketplace
@@ -831,6 +832,18 @@ func (s *Server) handleFSWrite(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func (s *Server) handleFSRaw(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		s.jsonError(w, "path parameter required", http.StatusBadRequest)
+		return
+	}
+	path = expandHome(path)
+
+	// Serve the file directly with proper MIME type
+	http.ServeFile(w, r, path)
 }
 
 func (s *Server) handleFSInfo(w http.ResponseWriter, r *http.Request) {

@@ -168,13 +168,16 @@ export function FilePreview({ file, currentPath, onClose }: FilePreviewProps) {
       {/* Content preview */}
       <div className="flex-1 overflow-y-auto scrollbar-none min-h-0">
         {file.type === "file" && isImageFile(file.name) && (
-          <div className="p-4 flex flex-col items-center gap-2">
-            <div className="w-full aspect-square rounded-lg bg-white/[0.03] border border-border flex items-center justify-center">
-              <div className="text-center">
-                <FileIcon name={file.name} isDir={false} size="lg" />
-                <p className="text-xs text-muted-foreground mt-2">Image Preview</p>
-              </div>
-            </div>
+          <div className="p-4">
+            <img
+              src={`/api/fs/raw?path=${encodeURIComponent(filePath)}`}
+              alt={file.name}
+              className="w-full rounded-lg border border-border object-contain max-h-[400px] bg-black/20"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+            <p className="text-[10px] text-muted-foreground text-center mt-2">{formatSize(file.size)}</p>
           </div>
         )}
 
