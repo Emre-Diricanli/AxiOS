@@ -139,6 +139,7 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	// Filesystem REST endpoints (call axios-fs MCP server directly)
 	mux.HandleFunc("/api/fs/list", s.handleFSList)
 	mux.HandleFunc("/api/fs/read", s.handleFSRead)
+	mux.HandleFunc("/api/fs/write", s.handleFSWrite)
 	mux.HandleFunc("/api/fs/info", s.handleFSInfo)
 
 	// Model marketplace
@@ -793,6 +794,43 @@ func (s *Server) handleFSRead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	data, _ := json.Marshal(map[string]string{"content": result.Content})
 	w.Write(data)
+}
+
+func (s *Server) handleFSWrite(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Path == "" {
+		s.jsonError(w, "path is required", http.StatusBadRequest)
+		return
+	}
+	req.Path = expandHome(req.Path)
+
+	result, err := s.mcpManager.CallTool("axios-fs", "write_file", map[string]any{
+		"path":    req.Path,
+		"content": req.Content,
+	})
+	if err != nil {
+		s.jsonError(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if result.IsError {
+		s.jsonError(w, result.Content, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
 func (s *Server) handleFSInfo(w http.ResponseWriter, r *http.Request) {

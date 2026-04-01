@@ -3,9 +3,26 @@ import { useFileSystem } from "@/hooks/useFileSystem";
 import { Breadcrumb } from "./Breadcrumb";
 import { FileIcon } from "./FileIcon";
 import { FilePreview } from "./FilePreview";
+import { FileEditor } from "./FileEditor";
 import type { FileEntry } from "@/types/messages";
 
 type ViewMode = "grid" | "list";
+
+const EDITABLE_EXTENSIONS = new Set([
+  "txt", "md", "js", "ts", "jsx", "tsx", "py", "go", "rs", "java", "c", "cpp",
+  "h", "cs", "rb", "php", "swift", "kt", "sh", "bash", "zsh", "json", "yaml",
+  "yml", "toml", "xml", "html", "css", "scss", "sql", "dockerfile", "makefile",
+  "gitignore", "env", "cfg", "conf", "ini", "log", "svg", "vue", "svelte", "r",
+  "lua", "csv", "mod", "sum", "lock", "mdx",
+]);
+
+function isEditableFile(name: string): boolean {
+  if (!name.includes(".")) {
+    return EDITABLE_EXTENSIONS.has(name.toLowerCase());
+  }
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return EDITABLE_EXTENSIONS.has(ext);
+}
 
 /* ---------- Helpers ---------- */
 
@@ -162,6 +179,7 @@ export function FileExplorer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
+  const [editingFile, setEditingFile] = useState<{ path: string; name: string } | null>(null);
 
   // Navigation history
   const [history, setHistory] = useState<string[]>(["/"]);
@@ -239,6 +257,13 @@ export function FileExplorer() {
         const next =
           currentPath === "/" ? `/${entry.name}` : `${currentPath}/${entry.name}`;
         handleNavigate(next);
+      } else if (isEditableFile(entry.name)) {
+        // Open editable files in the editor
+        const fullPath =
+          currentPath === "/" ? `/${entry.name}` : `${currentPath}/${entry.name}`;
+        setEditingFile({ path: fullPath, name: entry.name });
+        setShowPreview(false);
+        setSelectedFile(null);
       } else {
         setSelectedFile(entry);
         setShowPreview(true);
@@ -324,6 +349,17 @@ export function FileExplorer() {
 
       {/* ===== Main area ===== */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Editor mode — replaces toolbar + content when editing a file */}
+        {editingFile && (
+          <FileEditor
+            filePath={editingFile.path}
+            fileName={editingFile.name}
+            onClose={() => setEditingFile(null)}
+          />
+        )}
+
+        {/* Normal file browser (hidden when editor is open) */}
+        {!editingFile && <>
         {/* Toolbar */}
         <div className="flex items-center gap-1.5 px-2 h-10 border-b border-border shrink-0">
           {/* Sidebar toggle */}
@@ -624,6 +660,7 @@ export function FileExplorer() {
             <span className="text-muted-foreground/40">Local Storage</span>
           </div>
         </div>
+        </>}
       </div>
     </div>
   );
