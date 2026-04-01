@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FileIcon } from "./FileIcon";
 import type { FileEntry } from "@/types/messages";
+import { getFileCategory, type FileCategory } from "./FileIcon";
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -34,12 +35,31 @@ const TEXT_EXTENSIONS = new Set([
 
 function isTextFile(name: string): boolean {
   if (!name.includes(".")) {
-    // Files without extensions could be text (Makefile, Dockerfile, etc)
     return TEXT_EXTENSIONS.has(name);
   }
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   return TEXT_EXTENSIONS.has(ext);
 }
+
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"]);
+
+function isImageFile(name: string): boolean {
+  if (!name.includes(".")) return false;
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return IMAGE_EXTENSIONS.has(ext);
+}
+
+const CATEGORY_LABELS: Record<FileCategory, string> = {
+  code: "Source Code",
+  image: "Image",
+  video: "Video",
+  audio: "Audio",
+  document: "Document",
+  config: "Configuration",
+  archive: "Archive",
+  executable: "Executable",
+  default: "File",
+};
 
 interface FilePreviewProps {
   file: FileEntry;
@@ -51,17 +71,31 @@ export function FilePreview({ file, currentPath, onClose }: FilePreviewProps) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [visible, setVisible] = useState(false);
 
   const filePath =
     currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
 
+  const category = file.type === "dir" ? "default" : getFileCategory(file.name);
+  const kind = file.type === "dir" ? "Folder" : CATEGORY_LABELS[category];
+
+  // Slide-in animation
   useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  };
+
+  useEffect(() => {
+    setContent(null);
+    setError(null);
     if (file.type === "dir" || !isTextFile(file.name)) return;
-    // Only try to load text preview for reasonably-sized files (< 512 KB)
     if (file.size > 512 * 1024) return;
 
     setLoading(true);
-    setError(null);
     fetch(`/api/fs/read?path=${encodeURIComponent(filePath)}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -77,72 +111,102 @@ export function FilePreview({ file, currentPath, onClose }: FilePreviewProps) {
   }, [filePath, file.type, file.name, file.size]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col mx-4">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800">
-          <div className="flex items-center gap-3 min-w-0">
-            <FileIcon name={file.name} isDir={file.type === "dir"} className="text-xl" />
-            <h3 className="text-neutral-100 font-medium truncate">{file.name}</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-100 p-1 rounded hover:bg-neutral-800 transition-colors"
-          >
-            <span className="text-lg leading-none">{"\u2715"}</span>
-          </button>
-        </div>
+    <div
+      className={`flex flex-col h-full border-l border-border glass-subtle transition-all duration-200 ease-out overflow-hidden ${
+        visible ? "w-[300px] opacity-100" : "w-0 opacity-0"
+      }`}
+      style={{ minWidth: visible ? 300 : 0 }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preview</span>
+        <button
+          onClick={handleClose}
+          className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-white/[0.06] transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M4 4l8 8M12 4l-8 8" />
+          </svg>
+        </button>
+      </div>
 
-        {/* Info */}
-        <div className="px-5 py-4 border-b border-neutral-800 grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <span className="text-neutral-500">Path</span>
-            <p className="text-neutral-200 font-mono text-xs mt-0.5 truncate">{filePath}</p>
-          </div>
-          <div>
-            <span className="text-neutral-500">Size</span>
-            <p className="text-neutral-200 font-mono mt-0.5">{formatSize(file.size)}</p>
-          </div>
-          {file.permissions && (
-            <div>
-              <span className="text-neutral-500">Permissions</span>
-              <p className="text-neutral-200 font-mono mt-0.5">{file.permissions}</p>
-            </div>
-          )}
-          {file.mod_time && (
-            <div>
-              <span className="text-neutral-500">Modified</span>
-              <p className="text-neutral-200 mt-0.5">{formatDate(file.mod_time)}</p>
-            </div>
-          )}
+      {/* File icon + name */}
+      <div className="flex flex-col items-center gap-3 px-4 py-6 border-b border-border shrink-0">
+        <FileIcon name={file.name} isDir={file.type === "dir"} size="lg" />
+        <div className="text-center min-w-0 w-full">
+          <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{kind}</p>
         </div>
+      </div>
 
-        {/* Content preview */}
+      {/* Metadata */}
+      <div className="px-4 py-3 border-b border-border shrink-0 space-y-2">
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Size</span>
+          <span className="text-foreground/80 font-mono">{file.type === "dir" ? "--" : formatSize(file.size)}</span>
+        </div>
+        {file.mod_time && (
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">Modified</span>
+            <span className="text-foreground/80">{formatDate(file.mod_time)}</span>
+          </div>
+        )}
+        {file.permissions && (
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">Permissions</span>
+            <span className="text-foreground/80 font-mono">{file.permissions}</span>
+          </div>
+        )}
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Path</span>
+          <span className="text-foreground/80 font-mono truncate ml-4 max-w-[160px]" title={filePath}>
+            {filePath}
+          </span>
+        </div>
+      </div>
+
+      {/* Content preview */}
+      <div className="flex-1 overflow-y-auto scrollbar-none min-h-0">
+        {file.type === "file" && isImageFile(file.name) && (
+          <div className="p-4 flex flex-col items-center gap-2">
+            <div className="w-full aspect-square rounded-lg bg-white/[0.03] border border-border flex items-center justify-center">
+              <div className="text-center">
+                <FileIcon name={file.name} isDir={false} size="lg" />
+                <p className="text-xs text-muted-foreground mt-2">Image Preview</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {file.type === "file" && isTextFile(file.name) && (
-          <div className="flex-1 overflow-auto min-h-0">
+          <>
             {loading && (
-              <div className="p-5 text-neutral-500 text-sm">Loading preview...</div>
+              <div className="p-4 flex items-center gap-2">
+                <div className="w-3 h-3 border border-muted-foreground/30 border-t-primary rounded-full animate-spin" />
+                <span className="text-xs text-muted-foreground">Loading...</span>
+              </div>
             )}
             {error && (
-              <div className="p-5 text-red-400 text-sm">Failed to load preview: {error}</div>
+              <div className="p-4 text-xs text-red-400">Failed to load: {error}</div>
             )}
             {content !== null && (
-              <pre className="p-5 text-xs font-mono text-neutral-300 whitespace-pre-wrap break-words leading-relaxed">
-                {content.length > 10000 ? content.slice(0, 10000) + "\n\n... (truncated)" : content}
+              <pre className="p-4 text-[11px] font-mono text-foreground/70 whitespace-pre-wrap break-words leading-relaxed">
+                {content.length > 10000
+                  ? content.slice(0, 10000) + "\n\n... (truncated)"
+                  : content}
               </pre>
             )}
-          </div>
+            {file.size > 512 * 1024 && (
+              <div className="p-4 text-xs text-muted-foreground italic">
+                File too large for preview ({formatSize(file.size)})
+              </div>
+            )}
+          </>
         )}
 
-        {file.type === "file" && !isTextFile(file.name) && (
-          <div className="p-5 text-neutral-500 text-sm italic">
-            Binary file -- no preview available
-          </div>
-        )}
-
-        {file.size > 512 * 1024 && isTextFile(file.name) && (
-          <div className="p-5 text-neutral-500 text-sm italic">
-            File too large for preview ({formatSize(file.size)})
+        {file.type === "file" && !isTextFile(file.name) && !isImageFile(file.name) && (
+          <div className="p-4 text-xs text-muted-foreground italic">
+            No preview available for this file type.
           </div>
         )}
       </div>

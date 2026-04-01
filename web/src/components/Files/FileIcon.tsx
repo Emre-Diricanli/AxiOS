@@ -1,153 +1,186 @@
-const EXT_ICONS: Record<string, string> = {
+type IconSize = "sm" | "md" | "lg";
+
+const SIZE_MAP: Record<IconSize, number> = {
+  sm: 16,
+  md: 32,
+  lg: 48,
+};
+
+type FileCategory =
+  | "code"
+  | "image"
+  | "video"
+  | "audio"
+  | "document"
+  | "config"
+  | "archive"
+  | "executable"
+  | "default";
+
+const EXT_CATEGORY: Record<string, FileCategory> = {
+  // Code
+  ts: "code", tsx: "code", js: "code", jsx: "code",
+  py: "code", go: "code", rs: "code", rb: "code",
+  java: "code", c: "code", cpp: "code", h: "code",
+  cs: "code", php: "code", swift: "code", kt: "code",
+  scala: "code", sh: "code", bash: "code", zsh: "code",
+  fish: "code", css: "code", scss: "code", html: "code",
+  vue: "code", svelte: "code", sql: "code", r: "code",
+  lua: "code", zig: "code", nim: "code", ex: "code",
+  exs: "code", erl: "code", hs: "code", ml: "code",
+
   // Images
-  png: "\uD83D\uDDBC\uFE0F",
-  jpg: "\uD83D\uDDBC\uFE0F",
-  jpeg: "\uD83D\uDDBC\uFE0F",
-  gif: "\uD83D\uDDBC\uFE0F",
-  svg: "\uD83D\uDDBC\uFE0F",
-  webp: "\uD83D\uDDBC\uFE0F",
-  ico: "\uD83D\uDDBC\uFE0F",
-  bmp: "\uD83D\uDDBC\uFE0F",
+  png: "image", jpg: "image", jpeg: "image", gif: "image",
+  svg: "image", webp: "image", ico: "image", bmp: "image",
 
   // Video
-  mp4: "\uD83C\uDFAC",
-  mkv: "\uD83C\uDFAC",
-  avi: "\uD83C\uDFAC",
-  mov: "\uD83C\uDFAC",
-  webm: "\uD83C\uDFAC",
+  mp4: "video", mkv: "video", avi: "video", mov: "video", webm: "video",
 
   // Audio
-  mp3: "\uD83C\uDFB5",
-  wav: "\uD83C\uDFB5",
-  flac: "\uD83C\uDFB5",
-  ogg: "\uD83C\uDFB5",
-  aac: "\uD83C\uDFB5",
-
-  // Code
-  ts: "\uD83D\uDCBB",
-  tsx: "\uD83D\uDCBB",
-  js: "\uD83D\uDCBB",
-  jsx: "\uD83D\uDCBB",
-  py: "\uD83D\uDCBB",
-  go: "\uD83D\uDCBB",
-  rs: "\uD83D\uDCBB",
-  rb: "\uD83D\uDCBB",
-  java: "\uD83D\uDCBB",
-  c: "\uD83D\uDCBB",
-  cpp: "\uD83D\uDCBB",
-  h: "\uD83D\uDCBB",
-  cs: "\uD83D\uDCBB",
-  php: "\uD83D\uDCBB",
-  swift: "\uD83D\uDCBB",
-  kt: "\uD83D\uDCBB",
-  scala: "\uD83D\uDCBB",
-  sh: "\uD83D\uDCBB",
-  bash: "\uD83D\uDCBB",
-  zsh: "\uD83D\uDCBB",
-  fish: "\uD83D\uDCBB",
-  css: "\uD83D\uDCBB",
-  scss: "\uD83D\uDCBB",
-  html: "\uD83D\uDCBB",
-  vue: "\uD83D\uDCBB",
-  svelte: "\uD83D\uDCBB",
-  sql: "\uD83D\uDCBB",
-  r: "\uD83D\uDCBB",
-  lua: "\uD83D\uDCBB",
-  zig: "\uD83D\uDCBB",
-  nim: "\uD83D\uDCBB",
-  ex: "\uD83D\uDCBB",
-  exs: "\uD83D\uDCBB",
-  erl: "\uD83D\uDCBB",
-  hs: "\uD83D\uDCBB",
-  ml: "\uD83D\uDCBB",
-
-  // Data / Config
-  json: "\uD83D\uDCC4",
-  yaml: "\uD83D\uDCC4",
-  yml: "\uD83D\uDCC4",
-  toml: "\uD83D\uDCC4",
-  xml: "\uD83D\uDCC4",
-  csv: "\uD83D\uDCC4",
-  ini: "\uD83D\uDCC4",
-  env: "\uD83D\uDCC4",
-  conf: "\uD83D\uDCC4",
-  cfg: "\uD83D\uDCC4",
+  mp3: "audio", wav: "audio", flac: "audio", ogg: "audio", aac: "audio",
 
   // Documents
-  md: "\uD83D\uDCC3",
-  txt: "\uD83D\uDCC3",
-  pdf: "\uD83D\uDCC3",
-  doc: "\uD83D\uDCC3",
-  docx: "\uD83D\uDCC3",
-  rtf: "\uD83D\uDCC3",
+  md: "document", txt: "document", pdf: "document",
+  doc: "document", docx: "document", rtf: "document",
+
+  // Config
+  json: "config", yaml: "config", yml: "config", toml: "config",
+  xml: "config", csv: "config", ini: "config", env: "config",
+  conf: "config", cfg: "config",
 
   // Archives
-  zip: "\uD83D\uDCE6",
-  tar: "\uD83D\uDCE6",
-  gz: "\uD83D\uDCE6",
-  bz2: "\uD83D\uDCE6",
-  xz: "\uD83D\uDCE6",
-  "7z": "\uD83D\uDCE6",
-  rar: "\uD83D\uDCE6",
+  zip: "archive", tar: "archive", gz: "archive", bz2: "archive",
+  xz: "archive", "7z": "archive", rar: "archive",
 
-  // Executables / binaries
-  exe: "\u2699\uFE0F",
-  bin: "\u2699\uFE0F",
-  dmg: "\u2699\uFE0F",
-  deb: "\u2699\uFE0F",
-  rpm: "\u2699\uFE0F",
-  AppImage: "\u2699\uFE0F",
-
-  // Docker / infra
-  Dockerfile: "\uD83D\uDC33",
-  dockerignore: "\uD83D\uDC33",
-
-  // Lock files
-  lock: "\uD83D\uDD12",
-
-  // Git
-  gitignore: "\uD83D\uDCC2",
-
-  // Makefiles
-  Makefile: "\uD83D\uDD27",
-  mk: "\uD83D\uDD27",
+  // Executables
+  exe: "executable", bin: "executable", dmg: "executable",
+  deb: "executable", rpm: "executable",
 };
 
-/** Name-based icons for well-known files */
-const NAME_ICONS: Record<string, string> = {
-  Dockerfile: "\uD83D\uDC33",
-  Makefile: "\uD83D\uDD27",
-  LICENSE: "\uD83D\uDCC4",
-  README: "\uD83D\uDCC3",
-  "README.md": "\uD83D\uDCC3",
-  ".gitignore": "\uD83D\uDCC2",
-  ".dockerignore": "\uD83D\uDC33",
-  ".env": "\uD83D\uDD12",
-  "go.mod": "\uD83D\uDCBB",
-  "go.sum": "\uD83D\uDD12",
-  "package.json": "\uD83D\uDCE6",
-  "tsconfig.json": "\uD83D\uDCBB",
+const CATEGORY_COLORS: Record<FileCategory, string> = {
+  code: "#22c55e",
+  image: "#a855f7",
+  video: "#ef4444",
+  audio: "#f472b6",
+  document: "#3b82f6",
+  config: "#f59e0b",
+  archive: "#eab308",
+  executable: "#6b7280",
+  default: "#6b7280",
 };
+
+const SPECIAL_DIRS = new Set(["Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"]);
+
+function getFileCategory(name: string): FileCategory {
+  const ext = name.includes(".") ? name.split(".").pop()?.toLowerCase() ?? "" : "";
+  return EXT_CATEGORY[ext] ?? "default";
+}
+
+function getExtLabel(name: string): string | null {
+  if (!name.includes(".")) return null;
+  const ext = name.split(".").pop()?.toUpperCase() ?? "";
+  if (ext.length > 4) return null;
+  return ext;
+}
 
 interface FileIconProps {
   name: string;
   isDir: boolean;
+  size?: IconSize;
   className?: string;
 }
 
-export function FileIcon({ name, isDir, className }: FileIconProps) {
+export function FileIcon({ name, isDir, size = "md", className = "" }: FileIconProps) {
+  const px = SIZE_MAP[size];
+
   if (isDir) {
-    return <span className={className}>{"\uD83D\uDCC1"}</span>;
+    const isSpecial = SPECIAL_DIRS.has(name);
+    const gradFrom = isSpecial ? "#7c3aed" : "#4f6ef7";
+    const gradTo = isSpecial ? "#a855f7" : "#6987fa";
+
+    return (
+      <div
+        className={`relative flex-shrink-0 ${className}`}
+        style={{ width: px, height: px }}
+      >
+        <svg viewBox="0 0 48 48" width={px} height={px}>
+          {/* Folder tab */}
+          <path
+            d="M4 14 L4 10 Q4 7 7 7 L18 7 Q20 7 21 9 L23 13 L41 13 Q44 13 44 16 L44 38 Q44 41 41 41 L7 41 Q4 41 4 38 Z"
+            fill={`url(#folderGrad-${isSpecial ? "special" : "normal"})`}
+            rx="4"
+          />
+          {/* Folder body */}
+          <path
+            d="M4 18 L44 18 L44 38 Q44 41 41 41 L7 41 Q4 41 4 38 Z"
+            fill={`url(#folderBody-${isSpecial ? "special" : "normal"})`}
+            opacity="0.9"
+          />
+          {/* Shine */}
+          <path
+            d="M4 18 L44 18 L44 21 L4 21 Z"
+            fill="rgba(255,255,255,0.12)"
+          />
+          <defs>
+            <linearGradient id={`folderGrad-${isSpecial ? "special" : "normal"}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={gradTo} />
+              <stop offset="100%" stopColor={gradFrom} />
+            </linearGradient>
+            <linearGradient id={`folderBody-${isSpecial ? "special" : "normal"}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={gradTo} />
+              <stop offset="100%" stopColor={gradFrom} stopOpacity="0.85" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+    );
   }
 
-  // Check by full name first
-  if (NAME_ICONS[name]) {
-    return <span className={className}>{NAME_ICONS[name]}</span>;
-  }
+  // File icon
+  const category = getFileCategory(name);
+  const color = CATEGORY_COLORS[category];
+  const extLabel = getExtLabel(name);
+  const fontSize = size === "sm" ? 4 : size === "md" ? 7 : 9;
 
-  // Then by extension
-  const ext = name.includes(".") ? name.split(".").pop()?.toLowerCase() ?? "" : "";
-  const icon = EXT_ICONS[ext] ?? "\uD83D\uDCC4";
-
-  return <span className={className}>{icon}</span>;
+  return (
+    <div
+      className={`relative flex-shrink-0 ${className}`}
+      style={{ width: px, height: px }}
+    >
+      <svg viewBox="0 0 48 56" width={px} height={px}>
+        {/* Document body */}
+        <path
+          d="M4 4 Q4 1 7 1 L32 1 L44 14 L44 52 Q44 55 41 55 L7 55 Q4 55 4 52 Z"
+          fill="rgba(200, 200, 220, 0.12)"
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth="1"
+        />
+        {/* Corner fold */}
+        <path
+          d="M32 1 L32 11 Q32 14 35 14 L44 14 Z"
+          fill={color}
+          opacity="0.7"
+        />
+        {/* Color bar at bottom */}
+        <rect x="4" y="48" width="40" height="7" rx="0 0 3 3" fill={color} opacity="0.5" />
+        {/* Extension label */}
+        {extLabel && (
+          <text
+            x="24"
+            y="38"
+            textAnchor="middle"
+            fontSize={fontSize}
+            fontWeight="700"
+            fontFamily="system-ui, sans-serif"
+            fill={color}
+            opacity="0.9"
+          >
+            {extLabel}
+          </text>
+        )}
+      </svg>
+    </div>
+  );
 }
+
+export { getFileCategory, type FileCategory, type IconSize };
