@@ -576,6 +576,19 @@ func getDiskDarwin() []DiskStats {
 		availK, _ := strconv.ParseUint(fields[3], 10, 64)
 		mount := strings.Join(fields[8:], " ")
 
+		// Skip macOS system partitions that clutter the output
+		if strings.HasPrefix(mount, "/System/Volumes/") && mount != "/System/Volumes/Data" {
+			continue
+		}
+		if mount == "/System/Volumes/Data" {
+			// This is the same as /, skip the duplicate
+			continue
+		}
+		// Skip tiny partitions (< 1GB) like Preboot, Recovery, Hardware
+		if totalK < 1024*1024 {
+			continue
+		}
+
 		totalB := totalK * 1024
 		usedB := usedK * 1024
 		availB := availK * 1024
@@ -619,25 +632,17 @@ func getNetworkStats(hostname string) NetStats {
 			status = "up"
 		}
 
+		// Only include interfaces with an IPv4 address
 		ip := ""
 		addrs, err := iface.Addrs()
 		if err == nil {
 			for _, addr := range addrs {
-				// Prefer IPv4
 				if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
 					ip = ipNet.IP.String()
 					break
 				}
 			}
-			// Fall back to IPv6 if no IPv4
-			if ip == "" && len(addrs) > 0 {
-				if ipNet, ok := addrs[0].(*net.IPNet); ok {
-					ip = ipNet.IP.String()
-				}
-			}
 		}
-
-		// Skip interfaces with no IP address (virtual/tunnel with no connectivity)
 		if ip == "" {
 			continue
 		}
