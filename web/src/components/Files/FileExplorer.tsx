@@ -4,7 +4,15 @@ import { Breadcrumb } from "./Breadcrumb";
 import { FileIcon } from "./FileIcon";
 import { FilePreview } from "./FilePreview";
 import { FileEditor } from "./FileEditor";
+import { ImageViewer } from "./ImageViewer";
 import type { FileEntry } from "@/types/messages";
+
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"]);
+function isImageFile(name: string): boolean {
+  if (!name.includes(".")) return false;
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return IMAGE_EXTENSIONS.has(ext);
+}
 
 type ViewMode = "grid" | "list";
 
@@ -180,6 +188,7 @@ export function FileExplorer() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [editingFile, setEditingFile] = useState<{ path: string; name: string } | null>(null);
+  const [viewingImageIndex, setViewingImageIndex] = useState<number | null>(null);
 
   // Navigation history
   const [history, setHistory] = useState<string[]>(["/"]);
@@ -251,14 +260,27 @@ export function FileExplorer() {
     setShowPreview(true);
   }, []);
 
+  // Build image list from current directory for the viewer
+  const imageFiles = useMemo(() => {
+    return filteredEntries
+      .filter((e) => e.type === "file" && isImageFile(e.name))
+      .map((e) => ({
+        name: e.name,
+        path: currentPath === "/" ? `/${e.name}` : `${currentPath}/${e.name}`,
+      }));
+  }, [filteredEntries, currentPath]);
+
   const handleOpen = useCallback(
     (entry: FileEntry) => {
       if (entry.type === "dir") {
         const next =
           currentPath === "/" ? `/${entry.name}` : `${currentPath}/${entry.name}`;
         handleNavigate(next);
+      } else if (isImageFile(entry.name)) {
+        // Open image in fullscreen viewer
+        const idx = imageFiles.findIndex((img) => img.name === entry.name);
+        setViewingImageIndex(idx >= 0 ? idx : 0);
       } else if (isEditableFile(entry.name)) {
-        // Open editable files in the editor
         const fullPath =
           currentPath === "/" ? `/${entry.name}` : `${currentPath}/${entry.name}`;
         setEditingFile({ path: fullPath, name: entry.name });
@@ -269,7 +291,7 @@ export function FileExplorer() {
         setShowPreview(true);
       }
     },
-    [currentPath, handleNavigate],
+    [currentPath, handleNavigate, imageFiles],
   );
 
   // Stats
@@ -662,6 +684,16 @@ export function FileExplorer() {
         </div>
         </>}
       </div>
+
+      {/* Image viewer overlay */}
+      {viewingImageIndex !== null && imageFiles.length > 0 && (
+        <ImageViewer
+          images={imageFiles}
+          currentIndex={viewingImageIndex}
+          onClose={() => setViewingImageIndex(null)}
+          onNavigate={setViewingImageIndex}
+        />
+      )}
     </div>
   );
 }
