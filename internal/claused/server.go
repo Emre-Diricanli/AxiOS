@@ -736,11 +736,26 @@ func (s *Server) sendMessage(conn *websocket.Conn, msg ChatMessage) {
 
 // --- Filesystem REST endpoints ---
 
+func expandHome(path string) string {
+	if len(path) >= 1 && path[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+		if len(path) == 1 {
+			return home
+		}
+		return home + path[1:]
+	}
+	return path
+}
+
 func (s *Server) handleFSList(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		path = "/"
 	}
+	path = expandHome(path)
 
 	result, err := s.mcpManager.CallTool("axios-fs", "list_directory", map[string]any{"path": path})
 	if err != nil {
@@ -763,6 +778,7 @@ func (s *Server) handleFSRead(w http.ResponseWriter, r *http.Request) {
 		s.jsonError(w, "path parameter required", http.StatusBadRequest)
 		return
 	}
+	path = expandHome(path)
 
 	result, err := s.mcpManager.CallTool("axios-fs", "read_file", map[string]any{"path": path})
 	if err != nil {
@@ -785,6 +801,7 @@ func (s *Server) handleFSInfo(w http.ResponseWriter, r *http.Request) {
 		s.jsonError(w, "path parameter required", http.StatusBadRequest)
 		return
 	}
+	path = expandHome(path)
 
 	result, err := s.mcpManager.CallTool("axios-fs", "file_info", map[string]any{"path": path})
 	if err != nil {
