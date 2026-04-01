@@ -214,14 +214,8 @@ export function FileExplorer() {
   // Sidebar navigation (resolve ~ paths)
   const handleSidebarNav = useCallback(
     (path: string) => {
-      // For ~ paths, we navigate to a well-known location
-      // The backend should handle ~ expansion, but if not we attempt /root or /home
-      let resolved = path;
-      if (path.startsWith("~")) {
-        // Try common home dirs - the backend handles actual expansion
-        resolved = path.replace("~", "/root");
-      }
-      handleNavigate(resolved);
+      // Pass ~ paths directly — the backend expands them to the actual home dir
+      handleNavigate(path);
     },
     [handleNavigate],
   );
@@ -260,8 +254,11 @@ export function FileExplorer() {
 
   // Check if a sidebar item matches current path
   const isSidebarActive = (item: SidebarItem) => {
-    const resolved = item.path.startsWith("~") ? item.path.replace("~", "/root") : item.path;
-    return currentPath === resolved;
+    if (item.path === "/") return currentPath === "/";
+    if (item.path === "~") return currentPath.endsWith(currentPath.split("/").pop() ?? "") && currentPath.includes("/Users/") || currentPath.includes("/home/") || currentPath.includes("/root");
+    // For ~/Desktop etc, check if current path ends with the subfolder
+    const sub = item.path.replace("~/", "");
+    return currentPath.endsWith("/" + sub) && (currentPath.includes("/Users/") || currentPath.includes("/home/") || currentPath.includes("/root"));
   };
 
   return (
