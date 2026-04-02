@@ -1,10 +1,11 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useFileSystem } from "@/hooks/useFileSystem";
 import { Breadcrumb } from "./Breadcrumb";
 import { FileIcon } from "./FileIcon";
 import { FilePreview } from "./FilePreview";
 import { FileEditor } from "./FileEditor";
 import { ImageViewer } from "./ImageViewer";
+import { ContextMenu } from "./ContextMenu";
 import type { FileEntry } from "@/types/messages";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"]);
@@ -112,6 +113,166 @@ function downloadFile(filePath: string, fileName: string) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+/* ---------- Path helpers ---------- */
+
+function entryPath(currentPath: string, name: string): string {
+  return currentPath === "/" ? `/${name}` : `${currentPath}/${name}`;
+}
+
+function splitNameExt(name: string): [string, string] {
+  const dotIdx = name.lastIndexOf(".");
+  if (dotIdx <= 0) return [name, ""];
+  return [name.slice(0, dotIdx), name.slice(dotIdx)];
+}
+
+/* ---------- InlineRenameInput ---------- */
+
+function InlineRenameInput({
+  initialName,
+  isDir,
+  onConfirm,
+  onCancel,
+}: {
+  initialName: string;
+  isDir: boolean;
+  onConfirm: (newName: string) => void;
+  onCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState(initialName);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    if (!isDir && initialName.includes(".")) {
+      const [baseName] = splitNameExt(initialName);
+      el.setSelectionRange(0, baseName.length);
+    } else {
+      el.select();
+    }
+  }, [initialName, isDir]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      const trimmed = value.trim();
+      if (trimmed && trimmed !== initialName) {
+        onConfirm(trimmed);
+      } else {
+        onCancel();
+      }
+    } else if (e.key === "Escape") {
+      onCancel();
+    }
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={handleKeyDown}
+      onBlur={onCancel}
+      className="bg-white/10 border border-primary/50 rounded px-1.5 py-0.5 text-xs text-foreground outline-none w-full max-w-[200px]"
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+    />
+  );
+}
+
+/* ---------- InlineCreateInput ---------- */
+
+function InlineCreateInput({
+  placeholder,
+  onConfirm,
+  onCancel,
+}: {
+  placeholder: string;
+  onConfirm: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState("");
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      const trimmed = value.trim();
+      if (trimmed) onConfirm(trimmed);
+      else onCancel();
+    } else if (e.key === "Escape") {
+      onCancel();
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2.5 px-4 py-1.5">
+      <FileIcon name={placeholder.includes("folder") ? "__dir__" : "untitled"} isDir={placeholder.includes("folder")} size="sm" />
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={onCancel}
+        placeholder={placeholder}
+        className="bg-white/10 border border-primary/50 rounded px-1.5 py-0.5 text-xs text-foreground placeholder:text-muted-foreground/40 outline-none flex-1 max-w-[300px]"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
+/* ---------- DeleteConfirmDialog ---------- */
+
+function DeleteConfirmDialog({
+  name,
+  onConfirm,
+  onCancel,
+}: {
+  name: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+      if (e.key === "Enter") onConfirm();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onConfirm, onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="glass rounded-xl p-5 shadow-2xl max-w-sm w-full mx-4">
+        <h3 className="text-sm font-medium text-foreground mb-2">Delete &quot;{name}&quot;?</h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          This action cannot be undone. The item will be permanently removed.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-foreground transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1.5 text-xs rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ---------- Sidebar Items ---------- */
@@ -232,6 +393,13 @@ export function FileExplorer() {
   // Multi-select state
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const lastClickedRef = useRef<string | null>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: FileEntry | null } | null>(null);
+  const [clipboard, setClipboard] = useState<string | null>(null);
+  const [renamingEntry, setRenamingEntry] = useState<string | null>(null);
+  const [creating, setCreating] = useState<"file" | "folder" | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FileEntry | null>(null);
 
   // Drag & drop state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -490,6 +658,191 @@ export function FileExplorer() {
     const fullPath = currentPath === "/" ? `/${name}` : `${currentPath}/${name}`;
     downloadFile(fullPath, name);
   }, [selectedFiles, filteredEntries, currentPath]);
+
+  /* ---------- Context menu handlers ---------- */
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, entry: FileEntry | null) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({ x: e.clientX, y: e.clientY, entry });
+    },
+    [],
+  );
+
+  const handleRenameConfirm = useCallback(
+    async (oldName: string, newName: string) => {
+      const oldPath = entryPath(currentPath, oldName);
+      try {
+        const res = await fetch("/api/fs/rename", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: oldPath, new_name: newName }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          console.error("Rename failed:", data.error);
+        }
+      } catch (err) {
+        console.error("Rename failed:", err);
+      }
+      setRenamingEntry(null);
+      refresh();
+    },
+    [currentPath, refresh],
+  );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    const p = entryPath(currentPath, deleteTarget.name);
+    try {
+      const res = await fetch("/api/fs/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: p }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        console.error("Delete failed:", data.error);
+      }
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+    setDeleteTarget(null);
+    setSelectedFiles(new Set());
+    refresh();
+  }, [currentPath, deleteTarget, refresh]);
+
+  const handleCreateConfirm = useCallback(
+    async (name: string, type: "file" | "folder") => {
+      const p = entryPath(currentPath, name);
+      try {
+        if (type === "folder") {
+          const res = await fetch("/api/fs/mkdir", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: p }),
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            console.error("Mkdir failed:", data.error);
+          }
+        } else {
+          const res = await fetch("/api/fs/write", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: p, content: "" }),
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            console.error("Create file failed:", data.error);
+          }
+        }
+      } catch (err) {
+        console.error("Create failed:", err);
+      }
+      setCreating(null);
+      refresh();
+    },
+    [currentPath, refresh],
+  );
+
+  const handlePaste = useCallback(async () => {
+    if (!clipboard) return;
+    const fileName = clipboard.split("/").pop() ?? "";
+    const destination = entryPath(currentPath, fileName);
+    try {
+      const res = await fetch("/api/fs/copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: clipboard, destination }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        console.error("Paste failed:", data.error);
+      }
+    } catch (err) {
+      console.error("Paste failed:", err);
+    }
+    refresh();
+  }, [clipboard, currentPath, refresh]);
+
+  const handleContextAction = useCallback(
+    (action: string, entry?: FileEntry) => {
+      switch (action) {
+        case "open":
+          if (entry) handleOpen(entry);
+          break;
+        case "open-editor":
+          if (entry) {
+            setEditingFile({ path: entryPath(currentPath, entry.name), name: entry.name });
+            setShowPreview(false);
+            setSelectedFiles(new Set());
+          }
+          break;
+        case "rename":
+          if (entry) setRenamingEntry(entry.name);
+          break;
+        case "copy":
+          if (entry) setClipboard(entryPath(currentPath, entry.name));
+          break;
+        case "move":
+          if (entry) {
+            const src = entryPath(currentPath, entry.name);
+            const dest = window.prompt("Move to (full destination path):", src);
+            if (dest && dest !== src) {
+              fetch("/api/fs/move", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ source: src, destination: dest }),
+              })
+                .then((res) => {
+                  if (!res.ok) return res.json().then((d) => console.error("Move failed:", d.error));
+                })
+                .catch((err) => console.error("Move failed:", err))
+                .finally(() => refresh());
+            }
+          }
+          break;
+        case "download":
+          if (entry) {
+            const rawUrl = `/api/fs/raw?path=${encodeURIComponent(entryPath(currentPath, entry.name))}`;
+            window.open(rawUrl, "_blank");
+          }
+          break;
+        case "delete":
+          if (entry) setDeleteTarget(entry);
+          break;
+        case "new-folder":
+          setCreating("folder");
+          break;
+        case "new-file":
+          setCreating("file");
+          break;
+        case "paste":
+          handlePaste();
+          break;
+        case "refresh":
+          refresh();
+          break;
+      }
+    },
+    [currentPath, handleOpen, handlePaste, refresh],
+  );
+
+  const renderFileName = (entry: FileEntry) => {
+    if (renamingEntry === entry.name) {
+      return (
+        <InlineRenameInput
+          initialName={entry.name}
+          isDir={entry.type === "dir"}
+          onConfirm={(newName) => handleRenameConfirm(entry.name, newName)}
+          onCancel={() => setRenamingEntry(null)}
+        />
+      );
+    }
+    return entry.name;
+  };
 
   // Stats
   const dirCount = filteredEntries.filter((e) => e.type === "dir").length;
@@ -779,6 +1132,12 @@ export function FileExplorer() {
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
+            onContextMenu={(e) => {
+              const target = e.target as HTMLElement;
+              if (!target.closest("[data-file-entry]")) {
+                handleContextMenu(e, null);
+              }
+            }}
           >
             {/* Drag overlay */}
             {isDragOver && (
@@ -817,6 +1176,15 @@ export function FileExplorer() {
               </div>
             )}
 
+            {/* Inline create row */}
+            {creating && (
+              <InlineCreateInput
+                placeholder={creating === "folder" ? "New folder name..." : "New file name..."}
+                onConfirm={(name) => handleCreateConfirm(name, creating)}
+                onCancel={() => setCreating(null)}
+              />
+            )}
+
             {/* Empty */}
             {!loading && !error && filteredEntries.length === 0 && (
               <div className="flex flex-col items-center justify-center h-32 text-muted-foreground/40">
@@ -831,15 +1199,17 @@ export function FileExplorer() {
 
             {/* Grid view */}
             {!loading && !error && filteredEntries.length > 0 && viewMode === "grid" && (
-              <div className="p-3 grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-1.5">
+              <div className="p-2 grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-0.5">
                 {filteredEntries.map((entry) => {
                   const isSelected = selectedFiles.has(entry.name);
                   return (
                     <button
                       key={entry.name}
+                      data-file-entry
                       onClick={(e) => handleSelect(entry, e)}
                       onDoubleClick={() => handleOpen(entry)}
-                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all duration-150 group text-center ${
+                      onContextMenu={(e) => handleContextMenu(e, entry)}
+                      className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all duration-150 group text-center ${
                         isSelected
                           ? "border-glow bg-accent/50"
                           : "border border-transparent hover:bg-secondary hover:scale-[1.02]"
@@ -853,9 +1223,9 @@ export function FileExplorer() {
                         />
                       </div>
                       <span className="text-[11px] text-foreground/80 truncate w-full leading-tight mt-0.5">
-                        {entry.name}
+                        {renderFileName(entry)}
                       </span>
-                      {entry.type === "file" && (
+                      {entry.type === "file" && renamingEntry !== entry.name && (
                         <span className="text-[9px] font-mono text-muted-foreground/40">
                           {formatSize(entry.size)}
                         </span>
@@ -908,8 +1278,10 @@ export function FileExplorer() {
                     return (
                       <tr
                         key={entry.name}
+                        data-file-entry
                         onClick={(e) => handleSelect(entry, e)}
                         onDoubleClick={() => handleOpen(entry)}
+                        onContextMenu={(e) => handleContextMenu(e, entry)}
                         className={`cursor-pointer transition-colors duration-100 ${
                           isSelected
                             ? "bg-accent border-l-2 border-l-primary"
@@ -922,7 +1294,7 @@ export function FileExplorer() {
                           <div className="flex items-center gap-2.5">
                             <FileIcon name={entry.name} isDir={entry.type === "dir"} size="sm" />
                             <span className={`truncate ${isSelected ? "text-foreground font-medium" : "text-foreground/80"}`}>
-                              {entry.name}
+                              {renderFileName(entry)}
                             </span>
                           </div>
                         </td>
@@ -971,6 +1343,14 @@ export function FileExplorer() {
             {selectedCount > 0 && `, ${selectedCount} selected`}
           </span>
           <div className="flex items-center gap-3">
+            {clipboard && (
+              <>
+                <span className="text-primary/60 font-mono truncate max-w-[120px]" title={clipboard}>
+                  Copied: {clipboard.split("/").pop()}
+                </span>
+                <span className="text-muted-foreground/30">|</span>
+              </>
+            )}
             <span className="font-mono text-muted-foreground/50">{currentPath}</span>
             <span className="text-muted-foreground/30">|</span>
             <span className="text-muted-foreground/40">Local Storage</span>
@@ -978,6 +1358,28 @@ export function FileExplorer() {
         </div>
         </>}
       </div>
+
+      {/* Context menu overlay */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          entry={contextMenu.entry}
+          currentPath={currentPath}
+          onClose={() => setContextMenu(null)}
+          onAction={handleContextAction}
+          hasClipboard={!!clipboard}
+        />
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          name={deleteTarget.name}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
 
       {/* Image viewer overlay */}
       {viewingImageIndex !== null && imageFiles.length > 0 && (

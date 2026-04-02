@@ -13,7 +13,7 @@ function usageColor(pct: number): string {
   return "#ef4444";
 }
 
-function GaugeRing({ percent, size = 90, stroke = 7 }: { percent: number; size?: number; stroke?: number }) {
+function GaugeRing({ percent, size = 72, stroke = 6 }: { percent: number; size?: number; stroke?: number }) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ - (percent / 100) * circ;
@@ -31,8 +31,8 @@ function GaugeRing({ percent, size = 90, stroke = 7 }: { percent: number; size?:
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-xl font-bold font-mono" style={{ color }}>{percent.toFixed(0)}</span>
-        <span className="text-[9px] text-muted-foreground -mt-0.5">%</span>
+        <span className="text-base font-bold font-mono" style={{ color }}>{percent.toFixed(0)}</span>
+        <span className="text-[8px] text-muted-foreground -mt-0.5">%</span>
       </div>
     </div>
   );
@@ -57,7 +57,7 @@ export function Dashboard() {
   const primaryIface = stats?.network.interfaces.find((i) => i.ip && i.status === "up");
 
   return (
-    <div className="p-8 space-y-8 overflow-y-auto h-full scrollbar-none">
+    <div className="p-5 space-y-5 overflow-y-auto h-full scrollbar-none">
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
@@ -81,10 +81,10 @@ export function Dashboard() {
 
       {/* Gauges */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* CPU */}
-          <div className="glass rounded-2xl p-6">
-            <div className="flex items-center gap-5">
+          <div className="glass rounded-2xl p-4">
+            <div className="flex items-center gap-3">
               <GaugeRing percent={stats.cpu.usage_percent} />
               <div className="flex-1 min-w-0 space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">CPU</h3>
@@ -95,8 +95,8 @@ export function Dashboard() {
           </div>
 
           {/* Memory */}
-          <div className="glass rounded-2xl p-6">
-            <div className="flex items-center gap-5">
+          <div className="glass rounded-2xl p-4">
+            <div className="flex items-center gap-3">
               <GaugeRing percent={stats.memory.usage_percent} />
               <div className="flex-1 min-w-0 space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Memory</h3>
@@ -108,7 +108,7 @@ export function Dashboard() {
 
           {/* Disk */}
           {stats.disk.length > 0 && (
-            <div className="glass rounded-2xl p-6">
+            <div className="glass rounded-2xl p-4">
               <div className="flex items-center gap-5">
                 <GaugeRing percent={stats.disk[0].usage_percent} />
                 <div className="flex-1 min-w-0 space-y-2">
@@ -124,9 +124,9 @@ export function Dashboard() {
 
       {/* System info + Network row */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* System info */}
-          <div className="glass rounded-2xl p-6 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">System</h3>
             <div className="grid grid-cols-2 gap-y-3 gap-x-6">
               {[
@@ -144,7 +144,7 @@ export function Dashboard() {
           </div>
 
           {/* Network */}
-          <div className="glass rounded-2xl p-6 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Network</h3>
             {stats.network.interfaces.length === 0 ? (
               <p className="text-xs text-muted-foreground">No active connections</p>
@@ -167,7 +167,7 @@ export function Dashboard() {
 
       {/* Additional storage */}
       {stats && stats.disk.length > 1 && (
-        <div className="glass rounded-2xl p-6 space-y-4">
+        <div className="glass rounded-2xl p-4 space-y-4">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">All Storage</h3>
           {stats.disk.map((d) => (
             <div key={d.mount} className="space-y-2">
