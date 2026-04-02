@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/creack/pty"
@@ -142,6 +144,15 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/fs/write", s.handleFSWrite)
 	mux.HandleFunc("/api/fs/raw", s.handleFSRaw)
 	mux.HandleFunc("/api/fs/info", s.handleFSInfo)
+
+	// Filesystem management endpoints (rename, copy, move, delete, mkdir)
+	mux.HandleFunc("/api/fs/rename", s.handleFSRename)
+	mux.HandleFunc("/api/fs/copy", s.handleFSCopy)
+	mux.HandleFunc("/api/fs/move", s.handleFSMove)
+	mux.HandleFunc("/api/fs/delete", s.handleFSDelete)
+	mux.HandleFunc("/api/fs/mkdir", s.handleFSMkdir)
+	mux.HandleFunc("/api/fs/upload", s.handleFSUpload)
+	mux.HandleFunc("/api/fs/bulk-delete", s.handleFSBulkDelete)
 
 	// Model marketplace
 	mux.HandleFunc("/api/models/installed", s.handleModelsInstalled)
@@ -867,6 +878,314 @@ func (s *Server) handleFSInfo(w http.ResponseWriter, r *http.Request) {
 	// result.Content is already JSON from the MCP server
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(result.Content))
+}
+
+// --- Filesystem management endpoints (rename, copy, move, delete, mkdir) ---
+
+func (s *Server) handleFSRename(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path    string `json:"path"`
+		NewName string `json:"new_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Path == "" || req.NewName == "" {
+		s.jsonError(w, "path and new_name are required", http.StatusBadRequest)
+		return
+	}
+	if strings.Contains(req.NewName, "/") || strings.Contains(req.NewName, string(filepath.Separator)) {
+		s.jsonError(w, "new_name must not contain path separators", http.StatusBadRequest)
+		return
+	}
+
+	oldPath := expandHome(req.Path)
+	newPath := filepath.Join(filepath.Dir(oldPath), req.NewName)
+
+	if err := os.Rename(oldPath, newPath); err != nil {
+		s.jsonError(w, fmt.Sprintf("rename failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "new_path": newPath})
+}
+
+func (s *Server) handleFSCopy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Source      string `json:"source"`
+		Destination string `json:"destination"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Source == "" || req.Destination == "" {
+		s.jsonError(w, "source and destination are required", http.StatusBadRequest)
+		return
+	}
+
+	src := expandHome(req.Source)
+	dst := expandHome(req.Destination)
+
+	info, err := os.Stat(src)
+	if err != nil {
+		s.jsonError(w, fmt.Sprintf("source not found: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if info.IsDir() {
+		// Use cp -r for directories
+		cmd := exec.Command("cp", "-r", src, dst)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			s.jsonError(w, fmt.Sprintf("copy failed: %v — %s", err, string(out)), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Read and write for files
+		data, err := os.ReadFile(src)
+		if err != nil {
+			s.jsonError(w, fmt.Sprintf("read source failed: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if err := os.WriteFile(dst, data, info.Mode()); err != nil {
+			s.jsonError(w, fmt.Sprintf("write destination failed: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func (s *Server) handleFSMove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Source      string `json:"source"`
+		Destination string `json:"destination"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Source == "" || req.Destination == "" {
+		s.jsonError(w, "source and destination are required", http.StatusBadRequest)
+		return
+	}
+
+	src := expandHome(req.Source)
+	dst := expandHome(req.Destination)
+
+	if err := os.Rename(src, dst); err != nil {
+		s.jsonError(w, fmt.Sprintf("move failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func (s *Server) handleFSDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Path == "" {
+		s.jsonError(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	p := expandHome(req.Path)
+
+	info, err := os.Stat(p)
+	if err != nil {
+		s.jsonError(w, fmt.Sprintf("path not found: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if info.IsDir() {
+		err = os.RemoveAll(p)
+	} else {
+		err = os.Remove(p)
+	}
+	if err != nil {
+		s.jsonError(w, fmt.Sprintf("delete failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func (s *Server) handleFSMkdir(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Path == "" {
+		s.jsonError(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	p := expandHome(req.Path)
+
+	if err := os.MkdirAll(p, 0755); err != nil {
+		s.jsonError(w, fmt.Sprintf("mkdir failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func (s *Server) handleFSUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	destDir := r.URL.Query().Get("path")
+	if destDir == "" {
+		destDir = "/"
+	}
+	destDir = expandHome(destDir)
+
+	// Verify destination is a directory
+	info, err := os.Stat(destDir)
+	if err != nil {
+		s.jsonError(w, fmt.Sprintf("destination not found: %v", err), http.StatusBadRequest)
+		return
+	}
+	if !info.IsDir() {
+		s.jsonError(w, "destination is not a directory", http.StatusBadRequest)
+		return
+	}
+
+	// 32 MB max memory
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		s.jsonError(w, fmt.Sprintf("parse multipart failed: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	var savedFiles []string
+
+	for _, fileHeaders := range r.MultipartForm.File {
+		for _, fh := range fileHeaders {
+			src, err := fh.Open()
+			if err != nil {
+				s.jsonError(w, fmt.Sprintf("open uploaded file failed: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			// Sanitize filename — strip any path components
+			filename := filepath.Base(fh.Filename)
+			destPath := filepath.Join(destDir, filename)
+
+			dst, err := os.Create(destPath)
+			if err != nil {
+				src.Close()
+				s.jsonError(w, fmt.Sprintf("create file failed: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			if _, err := io.Copy(dst, src); err != nil {
+				src.Close()
+				dst.Close()
+				s.jsonError(w, fmt.Sprintf("write file failed: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			src.Close()
+			dst.Close()
+			savedFiles = append(savedFiles, filename)
+		}
+	}
+
+	s.logger.Info("files uploaded", "count", len(savedFiles), "dest", destDir)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "files": savedFiles})
+}
+
+func (s *Server) handleFSBulkDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Paths []string `json:"paths"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if len(req.Paths) == 0 {
+		s.jsonError(w, "paths array is required", http.StatusBadRequest)
+		return
+	}
+
+	var errors []string
+	deleted := 0
+
+	for _, p := range req.Paths {
+		p = expandHome(p)
+		info, err := os.Stat(p)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: not found", p))
+			continue
+		}
+		if info.IsDir() {
+			err = os.RemoveAll(p)
+		} else {
+			err = os.Remove(p)
+		}
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", p, err))
+		} else {
+			deleted++
+		}
+	}
+
+	s.logger.Info("bulk delete", "deleted", deleted, "errors", len(errors))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"ok":      len(errors) == 0,
+		"deleted": deleted,
+		"errors":  errors,
+	})
 }
 
 func (s *Server) jsonError(w http.ResponseWriter, msg string, status int) {

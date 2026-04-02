@@ -74,6 +74,46 @@ function getFileKind(entry: FileEntry): string {
   return map[ext] ?? `${ext.toUpperCase()} File`;
 }
 
+/* ---------- Upload helper ---------- */
+
+async function uploadFiles(files: FileList | File[], destPath: string): Promise<string[]> {
+  const formData = new FormData();
+  for (const file of Array.from(files)) {
+    formData.append("files", file);
+  }
+  const resp = await fetch(`/api/fs/upload?path=${encodeURIComponent(destPath)}`, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || "Upload failed");
+  return data.files as string[];
+}
+
+/* ---------- Bulk delete helper ---------- */
+
+async function bulkDeleteFiles(paths: string[]): Promise<void> {
+  const resp = await fetch("/api/fs/bulk-delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || "Bulk delete failed");
+}
+
+/* ---------- Download helper ---------- */
+
+function downloadFile(filePath: string, fileName: string) {
+  const a = document.createElement("a");
+  a.href = `/api/fs/raw?path=${encodeURIComponent(filePath)}`;
+  a.download = fileName;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 /* ---------- Sidebar Items ---------- */
 
 interface SidebarItem {
@@ -183,23 +223,37 @@ export function FileExplorer() {
   } = useFileSystem("/");
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
-  const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [editingFile, setEditingFile] = useState<{ path: string; name: string } | null>(null);
   const [viewingImageIndex, setViewingImageIndex] = useState<number | null>(null);
 
+  // Multi-select state
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const lastClickedRef = useRef<string | null>(null);
+
+  // Drag & drop state
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  // Upload state
+  const [uploading, setUploading] = useState(false);
+  const [uploadFileCount, setUploadFileCount] = useState(0);
+
   // Navigation history
   const [history, setHistory] = useState<string[]>(["/"]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const suppressHistoryRef = useRef(false);
 
+  // Hidden file input ref for manual file pick
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleNavigate = useCallback(
     (path: string) => {
       const normalized = path === "" ? "/" : path;
       navigateTo(normalized);
-      setSelectedFile(null);
+      setSelectedFiles(new Set());
       setSearchQuery("");
 
       if (suppressHistoryRef.current) {
@@ -224,7 +278,7 @@ export function FileExplorer() {
     setHistoryIndex(newIdx);
     suppressHistoryRef.current = true;
     navigateTo(history[newIdx]);
-    setSelectedFile(null);
+    setSelectedFiles(new Set());
     setSearchQuery("");
   }, [canGoBack, historyIndex, history, navigateTo]);
 
@@ -234,7 +288,7 @@ export function FileExplorer() {
     setHistoryIndex(newIdx);
     suppressHistoryRef.current = true;
     navigateTo(history[newIdx]);
-    setSelectedFile(null);
+    setSelectedFiles(new Set());
     setSearchQuery("");
   }, [canGoForward, historyIndex, history, navigateTo]);
 
@@ -254,11 +308,56 @@ export function FileExplorer() {
     return entries.filter((e) => e.name.toLowerCase().includes(q));
   }, [entries, searchQuery]);
 
-  // Selection
-  const handleSelect = useCallback((entry: FileEntry) => {
-    setSelectedFile(entry);
-    setShowPreview(true);
-  }, []);
+  // Multi-select handler
+  const handleSelect = useCallback(
+    (entry: FileEntry, e: React.MouseEvent) => {
+      const name = entry.name;
+      const isMeta = e.metaKey || e.ctrlKey;
+      const isShift = e.shiftKey;
+
+      if (isShift && lastClickedRef.current) {
+        // Range select
+        const names = filteredEntries.map((en) => en.name);
+        const startIdx = names.indexOf(lastClickedRef.current);
+        const endIdx = names.indexOf(name);
+        if (startIdx !== -1 && endIdx !== -1) {
+          const lo = Math.min(startIdx, endIdx);
+          const hi = Math.max(startIdx, endIdx);
+          const rangeNames = names.slice(lo, hi + 1);
+          setSelectedFiles((prev) => {
+            const next = new Set(prev);
+            for (const n of rangeNames) next.add(n);
+            return next;
+          });
+        }
+      } else if (isMeta) {
+        // Toggle individual
+        setSelectedFiles((prev) => {
+          const next = new Set(prev);
+          if (next.has(name)) {
+            next.delete(name);
+          } else {
+            next.add(name);
+          }
+          return next;
+        });
+        lastClickedRef.current = name;
+      } else {
+        // Single select
+        setSelectedFiles(new Set([name]));
+        lastClickedRef.current = name;
+        setShowPreview(true);
+      }
+    },
+    [filteredEntries],
+  );
+
+  // Get the currently selected FileEntry (single selection for preview)
+  const selectedFile = useMemo(() => {
+    if (selectedFiles.size !== 1) return null;
+    const name = Array.from(selectedFiles)[0];
+    return filteredEntries.find((e) => e.name === name) ?? null;
+  }, [selectedFiles, filteredEntries]);
 
   // Build image list from current directory for the viewer
   const imageFiles = useMemo(() => {
@@ -285,19 +384,125 @@ export function FileExplorer() {
           currentPath === "/" ? `/${entry.name}` : `${currentPath}/${entry.name}`;
         setEditingFile({ path: fullPath, name: entry.name });
         setShowPreview(false);
-        setSelectedFile(null);
+        setSelectedFiles(new Set());
       } else {
-        setSelectedFile(entry);
+        setSelectedFiles(new Set([entry.name]));
         setShowPreview(true);
       }
     },
     [currentPath, handleNavigate, imageFiles],
   );
 
+  // --- Drag & Drop handlers ---
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounterRef.current = 0;
+      setIsDragOver(false);
+
+      const files = e.dataTransfer.files;
+      if (!files || files.length === 0) return;
+
+      setUploading(true);
+      setUploadFileCount(files.length);
+      try {
+        await uploadFiles(files, currentPath);
+        refresh();
+      } catch (err) {
+        console.error("Upload failed:", err);
+      } finally {
+        setUploading(false);
+        setUploadFileCount(0);
+      }
+    },
+    [currentPath, refresh],
+  );
+
+  // --- File input change handler (for manual pick) ---
+  const handleFileInputChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      setUploading(true);
+      setUploadFileCount(files.length);
+      try {
+        await uploadFiles(files, currentPath);
+        refresh();
+      } catch (err) {
+        console.error("Upload failed:", err);
+      } finally {
+        setUploading(false);
+        setUploadFileCount(0);
+        // Reset so the same file can be re-selected
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [currentPath, refresh],
+  );
+
+  // --- Bulk delete handler ---
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedFiles.size === 0) return;
+    const paths = Array.from(selectedFiles).map((name) =>
+      currentPath === "/" ? `/${name}` : `${currentPath}/${name}`,
+    );
+    try {
+      await bulkDeleteFiles(paths);
+      setSelectedFiles(new Set());
+      setShowPreview(false);
+      refresh();
+    } catch (err) {
+      console.error("Bulk delete failed:", err);
+    }
+  }, [selectedFiles, currentPath, refresh]);
+
+  // --- Download handler ---
+  const handleDownload = useCallback(() => {
+    if (selectedFiles.size !== 1) return;
+    const name = Array.from(selectedFiles)[0];
+    const entry = filteredEntries.find((e) => e.name === name);
+    if (!entry || entry.type === "dir") return;
+    const fullPath = currentPath === "/" ? `/${name}` : `${currentPath}/${name}`;
+    downloadFile(fullPath, name);
+  }, [selectedFiles, filteredEntries, currentPath]);
+
   // Stats
   const dirCount = filteredEntries.filter((e) => e.type === "dir").length;
   const fileCount = filteredEntries.filter((e) => e.type === "file").length;
-  const selectedCount = selectedFile ? 1 : 0;
+  const selectedCount = selectedFiles.size;
+
+  // Can download: exactly one file (not directory) selected
+  const canDownload = useMemo(() => {
+    if (selectedFiles.size !== 1) return false;
+    const name = Array.from(selectedFiles)[0];
+    const entry = filteredEntries.find((e) => e.name === name);
+    return entry?.type === "file";
+  }, [selectedFiles, filteredEntries]);
 
   // Check if a sidebar item matches current path
   const isSidebarActive = (item: SidebarItem) => {
@@ -310,6 +515,15 @@ export function FileExplorer() {
 
   return (
     <div className="flex h-full overflow-hidden">
+      {/* Hidden file input for manual upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileInputChange}
+      />
+
       {/* ===== Sidebar ===== */}
       {sidebarOpen && (
         <div className="w-[200px] shrink-0 glass-subtle border-r border-border flex flex-col overflow-y-auto scrollbar-none">
@@ -426,6 +640,53 @@ export function FileExplorer() {
             <Breadcrumb path={currentPath} onNavigate={handleNavigate} />
           </div>
 
+          {/* Upload button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors"
+            title="Upload files"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M8 10V2M5 4.5L8 1.5l3 3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M2.5 11v2a1.5 1.5 0 001.5 1.5h8a1.5 1.5 0 001.5-1.5v-2" strokeLinecap="round" />
+            </svg>
+          </button>
+
+          {/* Download button (single file selected) */}
+          {canDownload && (
+            <button
+              onClick={handleDownload}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors"
+              title="Download file"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M8 2v8M5 7.5L8 10.5 11 7.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2.5 11v2a1.5 1.5 0 001.5 1.5h8a1.5 1.5 0 001.5-1.5v-2" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+
+          {/* Bulk delete button */}
+          {selectedCount > 1 && (
+            <>
+              <div className="w-px h-4 bg-border" />
+              <button
+                onClick={handleBulkDelete}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors text-xs"
+                title={`Delete ${selectedCount} items`}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M2 4h12M5 4V2.5a.5.5 0 01.5-.5h5a.5.5 0 01.5.5V4M6.5 7v4.5M9.5 7v4.5" strokeLinecap="round" />
+                  <path d="M3.5 4l.5 9.5a1 1 0 001 .5h6a1 1 0 001-.5l.5-9.5" />
+                </svg>
+                <span>Delete</span>
+                <span className="bg-destructive/20 text-destructive text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                  {selectedCount}
+                </span>
+              </button>
+            </>
+          )}
+
           {/* Search */}
           <div className="relative shrink-0">
             <svg
@@ -511,8 +772,31 @@ export function FileExplorer() {
 
         {/* Content + Preview wrapper */}
         <div className="flex-1 flex min-h-0">
-          {/* Content area */}
-          <div className="flex-1 overflow-y-auto scrollbar-none min-h-0 min-w-0">
+          {/* Content area with drag & drop */}
+          <div
+            className="flex-1 overflow-y-auto scrollbar-none min-h-0 min-w-0 relative"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            {/* Drag overlay */}
+            {isDragOver && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/10 backdrop-blur-[2px] border-2 border-dashed border-primary rounded-lg m-2 pointer-events-none"
+                style={{ boxShadow: "0 0 20px hsl(var(--primary) / 0.15) inset, 0 0 40px hsl(var(--primary) / 0.08)" }}
+              >
+                <div className="flex flex-col items-center gap-3 text-primary">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 15V3M8 7l4-4 4 4" />
+                    <path d="M20 21H4a1 1 0 01-1-1v-4" />
+                    <path d="M21 16v4a1 1 0 01-1 1" />
+                  </svg>
+                  <span className="text-sm font-medium">Drop files here to upload</span>
+                  <span className="text-xs text-primary/60">Files will be uploaded to {currentPath}</span>
+                </div>
+              </div>
+            )}
+
             {/* Loading */}
             {loading && (
               <div className="flex items-center justify-center h-32">
@@ -549,11 +833,11 @@ export function FileExplorer() {
             {!loading && !error && filteredEntries.length > 0 && viewMode === "grid" && (
               <div className="p-3 grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-1.5">
                 {filteredEntries.map((entry) => {
-                  const isSelected = selectedFile?.name === entry.name;
+                  const isSelected = selectedFiles.has(entry.name);
                   return (
                     <button
                       key={entry.name}
-                      onClick={() => handleSelect(entry)}
+                      onClick={(e) => handleSelect(entry, e)}
                       onDoubleClick={() => handleOpen(entry)}
                       className={`flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all duration-150 group text-center ${
                         isSelected
@@ -619,12 +903,12 @@ export function FileExplorer() {
                 </thead>
                 <tbody>
                   {filteredEntries.map((entry, idx) => {
-                    const isSelected = selectedFile?.name === entry.name;
+                    const isSelected = selectedFiles.has(entry.name);
                     const isEven = idx % 2 === 0;
                     return (
                       <tr
                         key={entry.name}
-                        onClick={() => handleSelect(entry)}
+                        onClick={(e) => handleSelect(entry, e)}
                         onDoubleClick={() => handleOpen(entry)}
                         className={`cursor-pointer transition-colors duration-100 ${
                           isSelected
@@ -662,11 +946,21 @@ export function FileExplorer() {
               currentPath={currentPath}
               onClose={() => {
                 setShowPreview(false);
-                setSelectedFile(null);
+                setSelectedFiles(new Set());
               }}
             />
           )}
         </div>
+
+        {/* Upload indicator toast */}
+        {uploading && (
+          <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-background/95 border border-border shadow-lg backdrop-blur-sm">
+            <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
+            <span className="text-xs text-foreground">
+              Uploading {uploadFileCount} file{uploadFileCount !== 1 ? "s" : ""}...
+            </span>
+          </div>
+        )}
 
         {/* Status bar */}
         <div className="flex items-center justify-between px-3 py-1.5 border-t border-border text-[10px] text-muted-foreground shrink-0">
