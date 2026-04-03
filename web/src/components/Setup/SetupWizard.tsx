@@ -414,48 +414,58 @@ function StepAI({
   const [ollamaLoading, setOllamaLoading] = useState(true);
   const [pulling, setPulling] = useState(false);
   const [pullModel, setPullModel] = useState("");
+  const [showRemote, setShowRemote] = useState(false);
+  const [remoteHost, setRemoteHost] = useState("");
+  const [remotePort, setRemotePort] = useState("11434");
+  const [remoteConnecting, setRemoteConnecting] = useState(false);
+  const [remoteConnected, setRemoteConnected] = useState(false);
+  const [remoteError, setRemoteError] = useState("");
 
   const recommendation = stats
     ? getModelRecommendation(stats.memory.total_bytes)
     : "qwen2.5:7b";
 
+  const checkOllama = useCallback(async () => {
+    setOllamaLoading(true);
+    try {
+      const res = await fetch("/api/hosts");
+      if (res.ok) {
+        const data = await res.json();
+        const hosts: Array<{
+          id: string;
+          name: string;
+          host: string;
+          status: string;
+          models?: string[];
+        }> = data.hosts ?? [];
+        const local = hosts.find(
+          (h) => h.id === "local" || h.host === "localhost"
+        );
+        if (local && local.status === "online") {
+          const modelsRes = await fetch("/api/models/installed");
+          let models: string[] = [];
+          if (modelsRes.ok) {
+            const md = await modelsRes.json();
+            models = (md.models ?? []).map(
+              (m: { name: string }) => m.name
+            );
+          }
+          setOllamaStatus({ running: true, models });
+        } else {
+          setOllamaStatus({ running: false, models: [] });
+        }
+      }
+    } catch {
+      setOllamaStatus({ running: false, models: [] });
+    } finally {
+      setOllamaLoading(false);
+    }
+  }, []);
+
   // Check Ollama on mount
   useEffect(() => {
     (async () => {
-      setOllamaLoading(true);
-      try {
-        const res = await fetch("/api/hosts");
-        if (res.ok) {
-          const data = await res.json();
-          const hosts: Array<{
-            name: string;
-            url: string;
-            healthy: boolean;
-            models?: string[];
-          }> = data.hosts ?? [];
-          const local = hosts.find(
-            (h) => h.name === "local" || h.url?.includes("localhost")
-          );
-          if (local && local.healthy) {
-            // Fetch models
-            const modelsRes = await fetch("/api/models/installed");
-            let models: string[] = [];
-            if (modelsRes.ok) {
-              const md = await modelsRes.json();
-              models = (md.models ?? []).map(
-                (m: { name: string }) => m.name
-              );
-            }
-            setOllamaStatus({ running: true, models });
-          } else {
-            setOllamaStatus({ running: false, models: [] });
-          }
-        }
-      } catch {
-        setOllamaStatus({ running: false, models: [] });
-      } finally {
-        setOllamaLoading(false);
-      }
+      await checkOllama();
     })();
   }, []);
 
@@ -467,7 +477,7 @@ function StepAI({
       const res = await fetch("/api/providers/key", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, key: apiKey }),
+        body: JSON.stringify({ provider, api_key: apiKey }),
       });
       if (res.ok) {
         setCloudStatus("success");
@@ -509,8 +519,40 @@ function StepAI({
     }
   }, [pullModel, recommendation]);
 
+  const connectRemote = useCallback(async () => {
+    setRemoteConnecting(true);
+    setRemoteError("");
+    try {
+      const res = await fetch("/api/hosts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Remote Server",
+          host: remoteHost.trim(),
+          port: parseInt(remotePort) || 11434,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Connection failed" }));
+        throw new Error(data.error || "Connection failed");
+      }
+      // Activate the remote host
+      const data = await res.json();
+      if (data.host?.id) {
+        await fetch(`/api/hosts/activate?id=${data.host.id}`, { method: "POST" });
+      }
+      setRemoteConnected(true);
+      setOllamaStatus({ running: true, models: data.host?.models ?? [] });
+    } catch (err: any) {
+      setRemoteError(err.message || "Failed to connect");
+    } finally {
+      setRemoteConnecting(false);
+    }
+  }, [remoteHost, remotePort]);
+
   const hasAI =
     cloudStatus === "success" ||
+    remoteConnected ||
     (ollamaStatus.running && ollamaStatus.models.length > 0);
 
   return (
@@ -738,28 +780,80 @@ function StepAI({
           ) : (
             <div>
               <div className="flex items-center gap-2 text-yellow-400 text-sm font-medium mb-3">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
-                Ollama not detected
+                Local Ollama not detected
               </div>
-              <p className="text-xs text-muted-foreground mb-2">
-                Install Ollama to run AI models locally:
+              <p className="text-xs text-muted-foreground mb-3">
+                No local Ollama found. You can install it or connect to a remote server running Ollama.
               </p>
-              <pre className="px-3 py-2 rounded-lg bg-black/30 border border-border text-xs font-mono text-foreground/80 select-all">
-                curl -fsSL https://ollama.com/install.sh | sh
-              </pre>
+              <div className="space-y-2">
+                <a
+                  href="https://ollama.com/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full px-3 py-2 rounded-lg text-xs font-medium bg-white/5 border border-border text-foreground hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+                  Download Ollama
+                </a>
+                <button
+                  onClick={() => {
+                    setOllamaLoading(true);
+                    checkOllama();
+                  }}
+                  className="w-full px-3 py-2 rounded-lg text-xs font-medium bg-white/5 border border-border text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
+                >
+                  Re-check local Ollama
+                </button>
+              </div>
             </div>
           )}
+
+          {/* Remote server option */}
+          <div className="mt-4 pt-4 border-t border-border">
+            <button
+              onClick={() => setShowRemote(!showRemote)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={`transition-transform ${showRemote ? "rotate-90" : ""}`}>
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+              Connect to remote Ollama server
+            </button>
+            {showRemote && (
+              <div className="mt-3 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={remoteHost}
+                    onChange={(e) => setRemoteHost(e.target.value)}
+                    placeholder="IP address (e.g. 192.168.1.50)"
+                    className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-border text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 transition-colors font-mono"
+                  />
+                  <input
+                    type="number"
+                    value={remotePort}
+                    onChange={(e) => setRemotePort(e.target.value)}
+                    placeholder="11434"
+                    className="w-20 px-3 py-2 rounded-lg bg-white/5 border border-border text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 transition-colors font-mono"
+                  />
+                </div>
+                <button
+                  onClick={connectRemote}
+                  disabled={!remoteHost.trim() || remoteConnecting}
+                  className="w-full px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {remoteConnecting && <Spinner className="w-4 h-4" />}
+                  {remoteConnecting ? "Connecting..." : remoteConnected ? "Connected ✓" : "Connect"}
+                </button>
+                {remoteError && <p className="text-xs text-destructive">{remoteError}</p>}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
