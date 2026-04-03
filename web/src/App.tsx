@@ -9,14 +9,25 @@ export default function App() {
   const [state, setState] = useState<SetupState>("loading");
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    // ?setup — force show wizard (for testing/re-running without deleting data)
+    if (params.has("setup")) {
+      setState("setup");
+      return;
+    }
+    // ?skip-setup — skip wizard even if not completed (dev convenience)
+    if (params.has("skip-setup")) {
+      setState("ready");
+      return;
+    }
+
     fetch("/api/setup/status")
       .then((res) => (res.ok ? res.json() : { completed: true }))
       .then((data: { completed: boolean }) => {
         setState(data.completed ? "ready" : "setup");
       })
       .catch(() => {
-        // If the endpoint is unreachable, assume setup is done so the
-        // main UI is still accessible.
         setState("ready");
       });
   }, []);
