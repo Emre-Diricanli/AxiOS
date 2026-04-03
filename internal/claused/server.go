@@ -187,6 +187,10 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/docker/images/pull", s.handleDockerImagePull)
 	mux.HandleFunc("/api/docker/compose", s.handleDockerCompose)
 	mux.HandleFunc("/api/docker/stats", s.handleDockerStats)
+
+	// First-boot setup wizard
+	mux.HandleFunc("/api/setup/status", s.handleSetupStatus)
+	mux.HandleFunc("/api/setup/complete", s.handleSetupComplete)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -1348,6 +1352,68 @@ func (s *Server) aiAskOllama(system, prompt string) (string, error) {
 		return "", fmt.Errorf("ollama request failed: %w", err)
 	}
 	return resp.Message.Content, nil
+}
+
+// axiosConfigDir returns the path to ~/.axios, creating it if needed.
+func axiosConfigDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".axios")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// handleSetupStatus returns whether the first-boot setup has been completed.
+func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	dir, err := axiosConfigDir()
+	if err != nil {
+		s.jsonError(w, "failed to resolve config dir: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	markerPath := filepath.Join(dir, "setup-complete")
+	completed := false
+	if _, err := os.Stat(markerPath); err == nil {
+		completed = true
+	}
+
+	json.NewEncoder(w).Encode(map[string]bool{"completed": completed})
+}
+
+// handleSetupComplete marks the first-boot setup as done.
+func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	dir, err := axiosConfigDir()
+	if err != nil {
+		s.jsonError(w, "failed to resolve config dir: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	markerPath := filepath.Join(dir, "setup-complete")
+
+	// Read the optional body so we can persist it as the marker content.
+	body, _ := io.ReadAll(r.Body)
+	if len(body) == 0 {
+		body = []byte("{}")
+	}
+
+	if err := os.WriteFile(markerPath, body, 0o644); err != nil {
+		s.jsonError(w, "failed to write setup marker: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
 
 func (s *Server) jsonError(w http.ResponseWriter, msg string, status int) {

@@ -199,3 +199,37 @@
   & *:first-child { margin-top: 0; }
   & *:last-child { margin-bottom: 0; }
 }
+
+/* Setup wizard animations */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 60px rgba(99, 102, 241, 0.3), 0 0 120px rgba(99, 102, 241, 0.1); }
+  50% { opacity: 0.85; box-shadow: 0 0 40px rgba(99, 102, 241, 0.15), 0 0 80px rgba(99, 102, 241, 0.05); }
+}
+
+@keyframes draw-check {
+  0% { stroke-dashoffset: 30; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
+
+.animate-draw-check {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: draw-check 0.6s ease-out 0.3s forwards;
+}
+
+/* Tailwind v4 animate-in utilities for setup transitions */
+@keyframes animate-in {
+  from { opacity: 0; transform: var(--tw-enter-translate, none); }
+  to { opacity: 1; transform: none; }
+}
+
+.animate-in {
+  animation: animate-in 0.5s ease-out both;
+}
+.fade-in { --tw-enter-opacity: 0; }
+.slide-in-from-bottom-4 { --tw-enter-translate: translateY(1rem); }
+.slide-in-from-right-4 { --tw-enter-translate: translateX(1rem); }

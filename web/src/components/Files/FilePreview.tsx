@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Markdown from "react-markdown";
 import { FileIcon } from "./FileIcon";
 import type { FileEntry } from "@/types/messages";
 import { getFileCategory, type FileCategory } from "./FileIcon";
@@ -72,6 +73,9 @@ export function FilePreview({ file, currentPath, onClose }: FilePreviewProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const filePath =
     currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`;
@@ -88,6 +92,13 @@ export function FilePreview({ file, currentPath, onClose }: FilePreviewProps) {
     setVisible(false);
     setTimeout(onClose, 200);
   };
+
+  // Reset AI state when file changes
+  useEffect(() => {
+    setAiResponse(null);
+    setAiError(null);
+    setAiLoading(false);
+  }, [filePath]);
 
   useEffect(() => {
     setContent(null);
@@ -109,6 +120,37 @@ export function FilePreview({ file, currentPath, onClose }: FilePreviewProps) {
       })
       .finally(() => setLoading(false));
   }, [filePath, file.type, file.name, file.size]);
+
+  const handleAskAI = useCallback(async () => {
+    if (!content) return;
+
+    setAiLoading(true);
+    setAiError(null);
+    setAiResponse(null);
+
+    try {
+      const res = await fetch("/api/ai/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `Explain this file (${file.name}). What does it do, what are the key parts, and how is it structured?`,
+          context: content.length > 15000 ? content.slice(0, 15000) + "\n\n... (truncated)" : content,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      const data: { response: string } = await res.json();
+      setAiResponse(data.response);
+    } catch (err: any) {
+      setAiError(err.message);
+    } finally {
+      setAiLoading(false);
+    }
+  }, [content, file.name]);
 
   return (
     <div
@@ -164,6 +206,42 @@ export function FilePreview({ file, currentPath, onClose }: FilePreviewProps) {
           </span>
         </div>
       </div>
+
+      {/* Ask AI button — shown for text files that have been loaded */}
+      {file.type === "file" && isTextFile(file.name) && content !== null && (
+        <div className="px-4 py-3 border-b border-border shrink-0">
+          <button
+            onClick={handleAskAI}
+            disabled={aiLoading}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-gradient-to-r from-primary/20 to-purple-500/20 text-primary hover:from-primary/30 hover:to-purple-500/30 border border-primary/20 transition-all duration-150 disabled:opacity-50"
+          >
+            {aiLoading ? (
+              <div className="w-3 h-3 border border-primary/30 border-t-primary rounded-full animate-spin" />
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 1v14M1 8h14M3 3l10 10M13 3L3 13" />
+              </svg>
+            )}
+            {aiLoading ? "Analyzing..." : "Ask AI about this file"}
+          </button>
+        </div>
+      )}
+
+      {/* AI Response */}
+      {(aiResponse || aiError) && (
+        <div className="px-4 py-3 border-b border-border shrink-0 max-h-[300px] overflow-y-auto scrollbar-none">
+          {aiError && (
+            <div className="px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-red-300">
+              {aiError}
+            </div>
+          )}
+          {aiResponse && (
+            <div className="prose-axios">
+              <Markdown>{aiResponse}</Markdown>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Content preview */}
       <div className="flex-1 overflow-y-auto scrollbar-none min-h-0">
