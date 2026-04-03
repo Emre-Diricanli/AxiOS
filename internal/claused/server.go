@@ -171,6 +171,10 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/providers/key", s.handleProviderKey)
 	mux.HandleFunc("/api/providers/activate", s.handleProviderActivate)
 
+	// Chat session management
+	mux.HandleFunc("/api/chat/sessions", s.handleSessionsRouter)
+	mux.HandleFunc("/api/chat/sessions/messages", s.handleSessionsMessages)
+
 	// Docker management
 	mux.HandleFunc("/api/docker/containers", s.handleDockerContainers)
 	mux.HandleFunc("/api/docker/containers/inspect", s.handleDockerContainer)
@@ -372,6 +376,11 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Type:    "status",
 			Content: "done",
 		})
+
+		// Auto-save sessions after each message exchange
+		if err := s.sessions.Save(); err != nil {
+			s.logger.Error("failed to auto-save sessions", "error", err)
+		}
 	}
 }
 

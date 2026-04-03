@@ -3,6 +3,7 @@ import { useModelMarketplace } from "@/hooks/useModelMarketplace";
 import type { InstalledModel, MarketplaceModel } from "@/types/models";
 import { HostsPanel } from "@/components/Models/HostsPanel";
 import { ProvidersPanel } from "@/components/Models/ProvidersPanel";
+import { toastSuccess, toastError, toastInfo } from "@/hooks/useToast";
 
 /* ── Helpers ─────────────────────────────────────────────── */
 
@@ -304,7 +305,7 @@ export function ModelsPage() {
         });
         setCurrentModel(name);
       } catch {
-        // ignore
+        toastError("Error", "Failed to switch model");
       }
     },
     []
@@ -395,7 +396,10 @@ export function ModelsPage() {
                 model={model}
                 isActive={isActiveModel(model.name)}
                 onUse={() => switchModel(model.name)}
-                onDelete={() => deleteModel(model.name)}
+                onDelete={() => {
+                  deleteModel(model.name);
+                  toastSuccess("Model deleted", model.name);
+                }}
               />
             ))}
           </div>
@@ -495,7 +499,10 @@ export function ModelsPage() {
                   installed={isInstalled(model.name)}
                   isPulling={!!progress}
                   pullProgress={progress}
-                  onInstall={(tag) => pullModel(tag)}
+                  onInstall={(tag) => {
+                    pullModel(tag);
+                    toastInfo("Pulling model", tag);
+                  }}
                 />
               );
             })}

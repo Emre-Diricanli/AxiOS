@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useHosts } from "@/hooks/useHosts";
 import type { OllamaHost } from "@/types/hosts";
+import { toastSuccess, toastInfo, toastError } from "@/hooks/useToast";
 
 /* ── Status dot colors ──────────────────────────────────── */
 
@@ -160,9 +161,12 @@ function AddHostForm({
     setFormError(null);
     try {
       await onAdd(name.trim(), host.trim(), portNum);
+      toastSuccess("Connected", `${name.trim()} at ${host.trim()}:${portNum}`);
       onCancel();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to add host");
+      const msg = err instanceof Error ? err.message : "Failed to add host";
+      toastError("Error", msg);
+      setFormError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -383,8 +387,8 @@ export function HostsPanel() {
             <HostCard
               key={host.id}
               host={host}
-              onActivate={() => activateHost(host.id)}
-              onRemove={() => removeHost(host.id)}
+              onActivate={() => activateHost(host.id).then(() => toastSuccess("Active", host.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Activation failed"))}
+              onRemove={() => removeHost(host.id).then(() => toastInfo("Removed", host.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Remove failed"))}
             />
           ))}
         </div>

@@ -10,6 +10,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { FileIcon } from "./FileIcon";
+import { toastSuccess, toastError } from "@/hooks/useToast";
 
 /* ---------- Language detection ---------- */
 
@@ -176,10 +177,12 @@ export function FileEditor({ filePath, fileName, onClose }: FileEditorProps) {
       modifiedRef.current = false;
       setModified(false);
       setSaveStatus("saved");
+      toastSuccess("Saved", fileName);
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (err: any) {
       setSaveStatus("error");
       setError(`Save failed: ${err.message}`);
+      toastError("Save failed", err.message);
       setTimeout(() => {
         setSaveStatus("idle");
         setError(null);

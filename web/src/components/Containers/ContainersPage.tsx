@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useDocker } from "@/hooks/useDocker";
 import type { Container, ContainerStats, RunContainerRequest } from "@/types/docker";
+import { toastSuccess, toastError } from "@/hooks/useToast";
 
 /* ── Status helpers ─────────────────────────────────────────────────── */
 
@@ -198,9 +199,12 @@ function RunContainerModal({
         volumes: volumes.filter((v) => v.trim()),
         restart,
       });
+      toastSuccess("Container started", name.trim() || image.trim());
       onClose();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to run container");
+      const msg = e instanceof Error ? e.message : "Failed to run container";
+      toastError("Error", msg);
+      setErr(msg);
     } finally {
       setBusy(false);
     }
@@ -305,12 +309,16 @@ function ComposeModal({
     try {
       if (action === "up") {
         await onUp(yaml, project.trim());
+        toastSuccess("Stack deployed", project.trim());
       } else {
         await onDown(project.trim());
+        toastSuccess("Stack removed", project.trim());
       }
       onClose();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : `Compose ${action} failed`);
+      const msg = e instanceof Error ? e.message : `Compose ${action} failed`;
+      toastError("Error", msg);
+      setErr(msg);
     } finally {
       setBusy(false);
     }
@@ -827,10 +835,10 @@ export function ContainersPage() {
                 key={c.id}
                 container={c}
                 stat={getStatForContainer(c.id)}
-                onStart={() => docker.startContainer(c.id)}
-                onStop={() => docker.stopContainer(c.id)}
-                onRestart={() => docker.restartContainer(c.id)}
-                onRemove={() => docker.removeContainer(c.id, true)}
+                onStart={() => docker.startContainer(c.id).then(() => toastSuccess("Container started", c.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Start failed"))}
+                onStop={() => docker.stopContainer(c.id).then(() => toastSuccess("Container stopped", c.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Stop failed"))}
+                onRestart={() => docker.restartContainer(c.id).then(() => toastSuccess("Container restarted", c.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Restart failed"))}
+                onRemove={() => docker.removeContainer(c.id, true).then(() => toastSuccess("Removed", c.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Remove failed"))}
                 onLogs={() => setLogsContainer(c)}
               />
             ))}

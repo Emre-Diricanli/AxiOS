@@ -24,8 +24,13 @@ const ModelsPage = lazy(() =>
     default: m.ModelsPage,
   }))
 );
+const SettingsPage = lazy(() =>
+  import("@/components/Settings/SettingsPage").then((m) => ({
+    default: m.SettingsPage,
+  }))
+);
 
-type Tab = "dashboard" | "files" | "terminal" | "system" | "containers" | "models" | "kubernetes";
+type Tab = "dashboard" | "files" | "terminal" | "system" | "containers" | "models" | "kubernetes" | "settings";
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
@@ -99,6 +104,16 @@ const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
         <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+      </svg>
+    ),
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
       </svg>
     ),
   },
@@ -229,6 +244,7 @@ export function Shell() {
                 {activeTab === "containers" && "Docker container management"}
                 {activeTab === "models" && "Browse and install AI models"}
                 {activeTab === "kubernetes" && "Container orchestration"}
+                {activeTab === "settings" && "System preferences and configuration"}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -254,6 +270,7 @@ export function Shell() {
               {activeTab === "containers" && <ContainersPage />}
               {activeTab === "models" && <ModelsPage />}
               {activeTab === "kubernetes" && <KubernetesPlaceholder />}
+              {activeTab === "settings" && <SettingsPage />}
             </Suspense>
           </div>
         </div>

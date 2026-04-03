@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useProviders } from "@/hooks/useProviders";
 import type { CloudProvider } from "@/types/providers";
+import { toastSuccess, toastInfo, toastError } from "@/hooks/useToast";
 
 /* ── Provider brand colors ─────────────────────────────── */
 
@@ -69,8 +70,11 @@ function ProviderCard({
       await onSetKey(apiKey.trim());
       setApiKey("");
       setShowKey(false);
+      toastSuccess("Connected", provider.name);
     } catch (err) {
-      setCardError(err instanceof Error ? err.message : "Failed to connect");
+      const msg = err instanceof Error ? err.message : "Failed to connect";
+      toastError("Error", msg);
+      setCardError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -82,8 +86,11 @@ function ProviderCard({
     setCardError(null);
     try {
       await onActivate(selectedModel);
+      toastSuccess("Active", `${selectedModel} on ${provider.name}`);
     } catch (err) {
-      setCardError(err instanceof Error ? err.message : "Failed to activate");
+      const msg = err instanceof Error ? err.message : "Failed to activate";
+      toastError("Error", msg);
+      setCardError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -95,8 +102,11 @@ function ProviderCard({
     try {
       await onRemoveKey();
       setConfirmRemove(false);
+      toastInfo("Disconnected", provider.name);
     } catch (err) {
-      setCardError(err instanceof Error ? err.message : "Failed to remove key");
+      const msg = err instanceof Error ? err.message : "Failed to remove key";
+      toastError("Error", msg);
+      setCardError(msg);
     } finally {
       setSubmitting(false);
     }

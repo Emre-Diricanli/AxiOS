@@ -7,6 +7,7 @@ import { FileEditor } from "./FileEditor";
 import { ImageViewer } from "./ImageViewer";
 import { ContextMenu } from "./ContextMenu";
 import type { FileEntry } from "@/types/messages";
+import { toastSuccess, toastError, toastInfo } from "@/hooks/useToast";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"]);
 function isImageFile(name: string): boolean {
@@ -599,8 +600,10 @@ export function FileExplorer() {
       setUploadFileCount(files.length);
       try {
         await uploadFiles(files, currentPath);
+        toastSuccess("Uploaded", `${files.length} file${files.length !== 1 ? "s" : ""} uploaded`);
         refresh();
       } catch (err) {
+        toastError("Upload failed", err instanceof Error ? err.message : "Unknown error");
         console.error("Upload failed:", err);
       } finally {
         setUploading(false);
@@ -620,8 +623,10 @@ export function FileExplorer() {
       setUploadFileCount(files.length);
       try {
         await uploadFiles(files, currentPath);
+        toastSuccess("Uploaded", `${files.length} file${files.length !== 1 ? "s" : ""} uploaded`);
         refresh();
       } catch (err) {
+        toastError("Upload failed", err instanceof Error ? err.message : "Unknown error");
         console.error("Upload failed:", err);
       } finally {
         setUploading(false);
@@ -641,10 +646,12 @@ export function FileExplorer() {
     );
     try {
       await bulkDeleteFiles(paths);
+      toastSuccess("Deleted", `${paths.length} item${paths.length !== 1 ? "s" : ""} removed`);
       setSelectedFiles(new Set());
       setShowPreview(false);
       refresh();
     } catch (err) {
+      toastError("Delete failed", err instanceof Error ? err.message : "Unknown error");
       console.error("Bulk delete failed:", err);
     }
   }, [selectedFiles, currentPath, refresh]);
@@ -681,9 +688,13 @@ export function FileExplorer() {
         });
         if (!res.ok) {
           const data = await res.json();
+          toastError("Rename failed", data.error);
           console.error("Rename failed:", data.error);
+        } else {
+          toastSuccess("Renamed", `${oldName} \u2192 ${newName}`);
         }
       } catch (err) {
+        toastError("Rename failed", err instanceof Error ? err.message : "Unknown error");
         console.error("Rename failed:", err);
       }
       setRenamingEntry(null);
@@ -694,7 +705,8 @@ export function FileExplorer() {
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
-    const p = entryPath(currentPath, deleteTarget.name);
+    const deleteName = deleteTarget.name;
+    const p = entryPath(currentPath, deleteName);
     try {
       const res = await fetch("/api/fs/delete", {
         method: "POST",
@@ -703,9 +715,13 @@ export function FileExplorer() {
       });
       if (!res.ok) {
         const data = await res.json();
+        toastError("Delete failed", data.error);
         console.error("Delete failed:", data.error);
+      } else {
+        toastSuccess("Deleted", `${deleteName} removed`);
       }
     } catch (err) {
+      toastError("Delete failed", err instanceof Error ? err.message : "Unknown error");
       console.error("Delete failed:", err);
     }
     setDeleteTarget(null);
@@ -725,7 +741,10 @@ export function FileExplorer() {
           });
           if (!res.ok) {
             const data = await res.json();
+            toastError("Create failed", data.error);
             console.error("Mkdir failed:", data.error);
+          } else {
+            toastSuccess("Created", `${name} created`);
           }
         } else {
           const res = await fetch("/api/fs/write", {
@@ -735,10 +754,14 @@ export function FileExplorer() {
           });
           if (!res.ok) {
             const data = await res.json();
+            toastError("Create failed", data.error);
             console.error("Create file failed:", data.error);
+          } else {
+            toastSuccess("Created", `${name} created`);
           }
         }
       } catch (err) {
+        toastError("Create failed", err instanceof Error ? err.message : "Unknown error");
         console.error("Create failed:", err);
       }
       setCreating(null);
@@ -784,7 +807,11 @@ export function FileExplorer() {
           if (entry) setRenamingEntry(entry.name);
           break;
         case "copy":
-          if (entry) setClipboard(entryPath(currentPath, entry.name));
+          if (entry) {
+            const copyPath = entryPath(currentPath, entry.name);
+            setClipboard(copyPath);
+            toastInfo("Copied", `${copyPath} copied to clipboard`);
+          }
           break;
         case "move":
           if (entry) {
