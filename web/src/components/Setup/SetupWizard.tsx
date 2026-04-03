@@ -104,16 +104,20 @@ function ProgressDots({ current }: { current: number }) {
         const isActive = step === current;
         const isDone = step < current;
         return (
-          <div
-            key={step}
-            className={`h-2.5 rounded-full transition-all duration-500 ${
-              isActive
-                ? "w-8 bg-primary shadow-[0_0_12px_rgba(99,102,241,0.6)]"
-                : isDone
-                  ? "w-2.5 bg-primary/60"
-                  : "w-2.5 bg-white/10"
-            }`}
-          />
+          <div key={step} className="relative">
+            {isActive && (
+              <div className="absolute inset-0 w-8 h-2.5 rounded-full bg-primary/30 animate-pulse-ring" />
+            )}
+            <div
+              className={`h-2.5 rounded-full transition-all duration-500 ease-out ${
+                isActive
+                  ? "w-8 bg-gradient-to-r from-primary to-purple-400 shadow-[0_0_16px_rgba(99,102,241,0.6)]"
+                  : isDone
+                    ? "w-2.5 bg-primary/60"
+                    : "w-2.5 bg-white/10"
+              }`}
+            />
+          </div>
         );
       })}
     </div>
@@ -171,28 +175,32 @@ function NavButtons({
 
 function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Logo */}
-      <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary via-purple-500 to-indigo-400 flex items-center justify-center mb-8 shadow-[0_0_60px_rgba(99,102,241,0.3),0_0_120px_rgba(99,102,241,0.1)] animate-pulse-slow">
-        <span className="text-3xl font-black text-white tracking-tighter select-none">
-          Ax
-        </span>
+    <div className="flex flex-col items-center justify-center text-center">
+      {/* Animated background rings */}
+      <div className="relative mb-10">
+        <div className="absolute inset-0 w-24 h-24 rounded-3xl bg-primary/20 animate-pulse-ring" />
+        <div className="absolute inset-0 w-24 h-24 rounded-3xl bg-primary/10 animate-pulse-ring delay-700" />
+        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary via-purple-500 to-indigo-400 flex items-center justify-center shadow-[0_0_60px_rgba(99,102,241,0.3),0_0_120px_rgba(99,102,241,0.1)] animate-pulse-slow animate-float relative z-10">
+          <span className="text-3xl font-black text-white tracking-tighter select-none">
+            Ax
+          </span>
+        </div>
       </div>
 
-      <h1 className="text-4xl font-bold text-foreground tracking-tight mb-3 text-glow">
-        Welcome to AxiOS
+      <h1 className="text-4xl font-bold text-foreground tracking-tight mb-3 text-glow animate-fade-up">
+        Welcome to Axi<span className="bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">OS</span>
       </h1>
-      <p className="text-lg text-muted-foreground mb-2">
+      <p className="text-lg text-muted-foreground mb-2 animate-fade-up delay-200">
         Your AI-native operating system
       </p>
-      <p className="text-sm text-muted-foreground/70 mb-10 max-w-md">
+      <p className="text-sm text-muted-foreground/70 mb-10 max-w-md animate-fade-up delay-400">
         Let&apos;s get you set up in a few minutes. We&apos;ll detect your
         hardware, configure AI backends, and personalize your experience.
       </p>
 
       <button
         onClick={onNext}
-        className="px-8 py-3.5 rounded-2xl text-base font-semibold bg-primary text-primary-foreground shadow-[0_0_30px_rgba(99,102,241,0.35)] hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] hover:brightness-110 transition-all duration-300"
+        className="px-8 py-3.5 rounded-2xl text-base font-semibold bg-gradient-to-r from-primary to-purple-500 text-primary-foreground shadow-[0_0_30px_rgba(99,102,241,0.35)] hover:shadow-[0_0_50px_rgba(99,102,241,0.6)] hover:scale-105 active:scale-95 transition-all duration-300 animate-fade-up delay-600"
       >
         Get Started
       </button>
@@ -217,9 +225,17 @@ function StepHardware({
 }) {
   if (loading || !stats) {
     return (
-      <div className="flex flex-col items-center justify-center animate-in fade-in duration-300">
-        <Spinner className="w-10 h-10 mb-6" />
-        <p className="text-sm text-muted-foreground">Detecting hardware...</p>
+      <div className="flex flex-col items-center justify-center">
+        <div className="relative mb-6">
+          <div className="w-16 h-16 rounded-full border-2 border-primary/20 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full border-2 border-transparent border-t-primary animate-spin absolute inset-0" />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary animate-pulse">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+              <rect x="9" y="9" width="6" height="6" />
+            </svg>
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground animate-pulse">Scanning hardware...</p>
       </div>
     );
   }
@@ -318,17 +334,18 @@ function StepHardware({
   ];
 
   return (
-    <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-      <h2 className="text-2xl font-bold mb-2">Hardware Detection</h2>
-      <p className="text-sm text-muted-foreground mb-8">
+    <div>
+      <h2 className="text-2xl font-bold mb-2 animate-fade-up">Hardware Detection</h2>
+      <p className="text-sm text-muted-foreground mb-8 animate-fade-up delay-100">
         We detected the following hardware on your machine.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {cards.map((c) => (
+        {cards.map((c, i) => (
           <div
             key={c.label}
-            className="glass rounded-xl p-5 flex items-start gap-4"
+            className={`glass rounded-xl p-5 flex items-start gap-4 animate-fade-up`}
+            style={{ animationDelay: `${200 + i * 150}ms` }}
           >
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
               {c.icon}
@@ -345,7 +362,8 @@ function StepHardware({
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
-                  className="text-emerald-400"
+                  className="text-emerald-400 animate-bounce-in"
+                  style={{ animationDelay: `${600 + i * 150}ms` }}
                 >
                   <path d="M20 6L9 17l-5-5" />
                 </svg>
@@ -1011,33 +1029,45 @@ function StepReady({
     .join(", ");
 
   return (
-    <div className="flex flex-col items-center justify-center text-center animate-in fade-in slide-in-from-right-4 duration-500">
-      {/* Animated checkmark */}
-      <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center mb-8 shadow-[0_0_60px_rgba(52,211,153,0.2)]">
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="text-emerald-400"
-        >
-          <path d="M20 6L9 17l-5-5" className="animate-draw-check" />
-        </svg>
+    <div className="flex flex-col items-center justify-center text-center">
+      {/* Animated checkmark with particle burst */}
+      <div className="relative mb-8">
+        {/* Particles */}
+        {[...Array(8)].map((_, i) => {
+          const angle = (i / 8) * Math.PI * 2;
+          const tx = Math.cos(angle) * 60;
+          const ty = Math.sin(angle) * 60;
+          return (
+            <div
+              key={i}
+              className="absolute left-1/2 top-1/2 w-2 h-2 rounded-full"
+              style={{
+                backgroundColor: i % 2 === 0 ? "#6366f1" : "#22c55e",
+                animation: `particle-scatter 0.8s ease-out ${i * 0.05}s forwards`,
+                "--tx": `${tx}px`,
+                "--ty": `${ty}px`,
+              } as React.CSSProperties}
+            />
+          );
+        })}
+        <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center shadow-[0_0_60px_rgba(52,211,153,0.3)] animate-bounce-in">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-400">
+            <path d="M20 6L9 17l-5-5" className="animate-draw-check" />
+          </svg>
+        </div>
       </div>
 
-      <h2 className="text-3xl font-bold mb-3 text-glow">AxiOS is Ready</h2>
-      <p className="text-sm text-muted-foreground mb-8 max-w-md">
+      <h2 className="text-3xl font-bold mb-3 animate-fade-up delay-300">
+        Axi<span className="bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">OS</span> is Ready
+      </h2>
+      <p className="text-sm text-muted-foreground mb-8 max-w-md animate-fade-up delay-500">
         Your system is configured and ready to go. Here&apos;s a summary of
         your setup.
       </p>
 
       {/* Summary cards */}
       <div className="w-full max-w-md space-y-3 text-left mb-10">
-        <div className="glass rounded-xl p-4 flex items-center gap-3">
+        <div className="glass rounded-xl p-4 flex items-center gap-3 animate-fade-up delay-600">
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
             <svg
               width="16"
@@ -1058,7 +1088,7 @@ function StepReady({
           </div>
         </div>
 
-        <div className="glass rounded-xl p-4 flex items-center gap-3">
+        <div className="glass rounded-xl p-4 flex items-center gap-3 animate-fade-up delay-700">
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
             <svg
               width="16"
@@ -1117,7 +1147,7 @@ function StepReady({
         <button
           onClick={onComplete}
           disabled={completing}
-          className="px-8 py-3.5 rounded-2xl text-base font-semibold bg-primary text-primary-foreground shadow-[0_0_30px_rgba(99,102,241,0.35)] hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] hover:brightness-110 transition-all duration-300 disabled:opacity-50 flex items-center gap-2"
+          className="px-8 py-3.5 rounded-2xl text-base font-semibold bg-gradient-to-r from-primary to-purple-500 text-primary-foreground shadow-[0_0_30px_rgba(99,102,241,0.35)] hover:shadow-[0_0_50px_rgba(99,102,241,0.6)] hover:scale-105 active:scale-95 transition-all duration-300 disabled:opacity-50 flex items-center gap-2 animate-fade-up delay-1000"
         >
           {completing && <Spinner className="w-4 h-4" />}
           Enter AxiOS
