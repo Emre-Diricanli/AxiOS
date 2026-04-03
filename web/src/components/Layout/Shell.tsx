@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, useEffect, lazy, Suspense } from "react"
 import { ChatPanel } from "@/components/Chat/ChatPanel";
 import { FileExplorer } from "@/components/Files/FileExplorer";
 import { ModelPicker } from "./ModelPicker";
+import { CommandPalette } from "./CommandPalette";
 
 const Terminal = lazy(() => import("@/components/Terminal/Terminal"));
 const SystemDashboard = lazy(() =>
@@ -136,8 +137,10 @@ export function Shell() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(400);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+  const newChatRef = useRef<(() => void) | null>(null);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
@@ -162,6 +165,36 @@ export function Shell() {
     };
     document.addEventListener("selectstart", handler);
     return () => document.removeEventListener("selectstart", handler);
+  }, []);
+
+  // Cmd+K / Ctrl+K to open command palette
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setPaletteOpen((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
+  const handlePaletteNavigate = useCallback((tab: string) => {
+    setActiveTab(tab as Tab);
+  }, []);
+
+  const handlePaletteToggleChat = useCallback(() => {
+    setChatOpen((prev) => !prev);
+  }, []);
+
+  const handlePaletteOpenChat = useCallback(() => {
+    setChatOpen(true);
+  }, []);
+
+  const handlePaletteNewChat = useCallback(() => {
+    setChatOpen(true);
+    // Trigger new chat creation via the ref set by ChatPanel
+    newChatRef.current?.();
   }, []);
 
   return (
@@ -293,11 +326,21 @@ export function Shell() {
               className="shrink-0 min-w-0 overflow-hidden flex flex-col my-4 mr-4 rounded-xl glass"
               style={{ width: chatWidth }}
             >
-              <ChatPanel />
+              <ChatPanel newChatRef={newChatRef} />
             </div>
           </>
         )}
       </div>
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onNavigate={handlePaletteNavigate}
+        onToggleChat={handlePaletteToggleChat}
+        onOpenChat={handlePaletteOpenChat}
+        onNewChat={handlePaletteNewChat}
+      />
     </div>
   );
 }

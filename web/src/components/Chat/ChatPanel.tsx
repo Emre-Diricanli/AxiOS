@@ -1,9 +1,13 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect, type MutableRefObject } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { MessageBubble } from "./MessageBubble";
 import { ToolBlock } from "./ToolBlock";
 import { InputBar } from "./InputBar";
 import type { ChatMessage } from "@/types/messages";
+
+interface ChatPanelProps {
+  newChatRef?: MutableRefObject<(() => void) | null>;
+}
 
 interface DisplayMessage {
   id: string;
@@ -36,7 +40,7 @@ function relativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-export function ChatPanel() {
+export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [activeModel, setActiveModel] = useState<string | null>(null);
@@ -45,8 +49,7 @@ export function ChatPanel() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamBufferRef = useRef("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
+  const fetchSessionsRef = useRef<() => void>(() => {});
   const onMessage = useCallback((msg: ChatMessage) => {
     if (msg.type === "assistant") {
       streamBufferRef.current += msg.content;
@@ -93,7 +96,7 @@ export function ChatPanel() {
       streamBufferRef.current = "";
       setStreaming(false);
       // Refresh session list after a response completes
-      fetchSessions();
+      fetchSessionsRef.current();
     }
   }, []);
 
@@ -112,6 +115,9 @@ export function ChatPanel() {
     }
   }, []);
 
+  // Keep the ref up to date
+  fetchSessionsRef.current = fetchSessions;
+
   // Create a new session
   const createSession = useCallback(async () => {
     try {
@@ -122,7 +128,6 @@ export function ChatPanel() {
         setMessages([]);
         streamBufferRef.current = "";
         await fetchSessions();
-        inputRef.current?.focus();
       }
     } catch {
       // ignore
@@ -207,6 +212,30 @@ export function ChatPanel() {
     },
     [send, sessionId]
   );
+
+  // Expose createSession to parent via ref (for Command Palette "New Chat")
+  useEffect(() => {
+    if (newChatRef) {
+      newChatRef.current = createSession;
+    }
+    return () => {
+      if (newChatRef) {
+        newChatRef.current = null;
+      }
+    };
+  }, [newChatRef, createSession]);
+
+  // Listen for chat messages from command palette
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (detail) {
+        handleSend(detail);
+      }
+    };
+    window.addEventListener("axios-send-chat", handler);
+    return () => window.removeEventListener("axios-send-chat", handler);
+  }, [handleSend]);
 
   // Fetch active model on mount + poll every 3s for changes
   useEffect(() => {

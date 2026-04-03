@@ -175,6 +175,9 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/chat/sessions", s.handleSessionsRouter)
 	mux.HandleFunc("/api/chat/sessions/messages", s.handleSessionsMessages)
 
+	// AI quick-ask endpoint (non-streaming, one-shot)
+	mux.HandleFunc("/api/ai/ask", s.handleAIAsk)
+
 	// Docker management
 	mux.HandleFunc("/api/docker/containers", s.handleDockerContainers)
 	mux.HandleFunc("/api/docker/containers/inspect", s.handleDockerContainer)
@@ -1195,6 +1198,156 @@ func (s *Server) handleFSBulkDelete(w http.ResponseWriter, r *http.Request) {
 		"deleted": deleted,
 		"errors":  errors,
 	})
+}
+
+// handleAIAsk handles one-shot AI queries without going through the chat WebSocket.
+// POST /api/ai/ask — body: {"prompt": "...", "context": "..."}
+// Returns: {"response": "..."}
+func (s *Server) handleAIAsk(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.jsonError(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Prompt  string `json:"prompt"`
+		Context string `json:"context"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Prompt == "" {
+		s.jsonError(w, "prompt is required", http.StatusBadRequest)
+		return
+	}
+
+	// Build the user message: prompt + optional context
+	userContent := req.Prompt
+	if req.Context != "" {
+		userContent = req.Prompt + "\n\n" + req.Context
+	}
+
+	messages := []Message{
+		{Role: "user", Content: userContent},
+	}
+
+	systemPrompt := "You are a helpful code assistant integrated into a file editor. Provide clear, concise, and accurate responses. When showing code, use markdown code blocks with the appropriate language tag."
+
+	backend := s.router.Route()
+	s.logger.Info("ai/ask request", "backend", string(backend), "prompt_len", len(req.Prompt), "context_len", len(req.Context))
+
+	var responseText string
+
+	switch backend {
+	case BackendCloud:
+		// Check if we should use an OpenAI-compatible provider
+		if s.openaiClient != nil && s.providerStore != nil {
+			active := s.providerStore.GetActive()
+			if active != nil && active.Compatible == "openai" {
+				text, err := s.aiAskOpenAI(systemPrompt, messages)
+				if err != nil {
+					s.jsonError(w, err.Error(), http.StatusBadGateway)
+					return
+				}
+				responseText = text
+				break
+			}
+		}
+		// Use Anthropic
+		if s.anthropic == nil {
+			s.jsonError(w, "no cloud provider configured", http.StatusBadRequest)
+			return
+		}
+		text, err := s.aiAskAnthropic(systemPrompt, messages)
+		if err != nil {
+			s.jsonError(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		responseText = text
+
+	case BackendLocal:
+		if s.ollama == nil {
+			s.jsonError(w, "Ollama not configured", http.StatusBadRequest)
+			return
+		}
+		text, err := s.aiAskOllama(systemPrompt, userContent)
+		if err != nil {
+			s.jsonError(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		responseText = text
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"response": responseText})
+}
+
+// aiAskAnthropic sends a one-shot question to the Anthropic API.
+func (s *Server) aiAskAnthropic(system string, messages []Message) (string, error) {
+	resp, err := s.anthropic.SendMessage(system, messages, nil)
+	if err != nil {
+		return "", fmt.Errorf("anthropic request failed: %w", err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return "", fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var apiResp anthropicResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return "", fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	var text string
+	for _, block := range apiResp.Content {
+		if block.Type == "text" {
+			text += block.Text
+		}
+	}
+	return text, nil
+}
+
+// aiAskOpenAI sends a one-shot question to an OpenAI-compatible API.
+func (s *Server) aiAskOpenAI(system string, messages []Message) (string, error) {
+	resp, err := s.openaiClient.SendMessage(system, messages, nil)
+	if err != nil {
+		return "", fmt.Errorf("openai request failed: %w", err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return "", fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var apiResp OpenAIResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return "", fmt.Errorf("unmarshal response: %w", err)
+	}
+	if len(apiResp.Choices) == 0 {
+		return "", fmt.Errorf("no choices in response")
+	}
+	return apiResp.Choices[0].Message.Content, nil
+}
+
+// aiAskOllama sends a one-shot question to the Ollama API.
+func (s *Server) aiAskOllama(system, prompt string) (string, error) {
+	messages := []ollamaChatMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: prompt},
+	}
+	resp, err := s.ollama.Chat("", messages, nil)
+	if err != nil {
+		return "", fmt.Errorf("ollama request failed: %w", err)
+	}
+	return resp.Message.Content, nil
 }
 
 func (s *Server) jsonError(w http.ResponseWriter, msg string, status int) {

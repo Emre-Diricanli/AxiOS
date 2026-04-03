@@ -9,6 +9,7 @@ import { css } from "@codemirror/lang-css";
 import { markdown } from "@codemirror/lang-markdown";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
 import { oneDark } from "@codemirror/theme-one-dark";
+import Markdown from "react-markdown";
 import { FileIcon } from "./FileIcon";
 import { toastSuccess, toastError } from "@/hooks/useToast";
 
@@ -131,6 +132,297 @@ const axiosTheme = EditorView.theme({
   },
 });
 
+/* ---------- AI Quick Actions ---------- */
+
+interface AIAction {
+  label: string;
+  icon: string;
+  prompt: (code: string) => string;
+}
+
+const AI_ACTIONS: AIAction[] = [
+  {
+    label: "Explain",
+    icon: "\uD83D\uDCD6",
+    prompt: (code) => `Explain what this code does in detail:\n\n\`\`\`\n${code}\n\`\`\``,
+  },
+  {
+    label: "Fix bugs",
+    icon: "\uD83D\uDC1B",
+    prompt: (code) => `Find and fix bugs in this code:\n\n\`\`\`\n${code}\n\`\`\``,
+  },
+  {
+    label: "Refactor",
+    icon: "\u2728",
+    prompt: (code) => `Refactor this code to be cleaner and more efficient:\n\n\`\`\`\n${code}\n\`\`\``,
+  },
+  {
+    label: "Add comments",
+    icon: "\uD83D\uDCDD",
+    prompt: (code) => `Add clear comments to this code:\n\n\`\`\`\n${code}\n\`\`\``,
+  },
+  {
+    label: "Write tests",
+    icon: "\uD83E\uDDEA",
+    prompt: (code) => `Write unit tests for this code:\n\n\`\`\`\n${code}\n\`\`\``,
+  },
+];
+
+/* ---------- AI Panel Component ---------- */
+
+interface AIPanelProps {
+  viewRef: React.RefObject<EditorView | null>;
+  fileName: string;
+  onClose: () => void;
+}
+
+function AIPanel({ viewRef, fileName, onClose }: AIPanelProps) {
+  const [prompt, setPrompt] = useState("");
+  const [response, setResponse] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const responseRef = useRef<HTMLDivElement>(null);
+  const selectionRangeRef = useRef<{ from: number; to: number } | null>(null);
+
+  const getCodeContext = useCallback((): string => {
+    const view = viewRef.current;
+    if (!view) return "";
+    const sel = view.state.selection.main;
+    if (sel.from !== sel.to) {
+      selectionRangeRef.current = { from: sel.from, to: sel.to };
+      return view.state.sliceDoc(sel.from, sel.to);
+    }
+    selectionRangeRef.current = null;
+    return view.state.doc.toString();
+  }, [viewRef]);
+
+  const askAI = useCallback(async (question: string) => {
+    const context = getCodeContext();
+    if (!context && !question) return;
+
+    setLoading(true);
+    setAiError(null);
+    setResponse(null);
+
+    try {
+      const res = await fetch("/api/ai/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: question, context }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      const data: { response: string } = await res.json();
+      setResponse(data.response);
+    } catch (err: any) {
+      setAiError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [getCodeContext]);
+
+  const handleQuickAction = useCallback((action: AIAction) => {
+    const code = getCodeContext();
+    const question = action.prompt(code);
+    setPrompt(question);
+    askAI(question);
+  }, [getCodeContext, askAI]);
+
+  const handleSubmit = useCallback(() => {
+    if (!prompt.trim()) return;
+    askAI(prompt);
+  }, [prompt, askAI]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  }, [handleSubmit]);
+
+  // Apply code from AI response to the editor
+  const applyCode = useCallback((code: string) => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const range = selectionRangeRef.current;
+    if (range) {
+      // Replace selected region
+      view.dispatch({
+        changes: { from: range.from, to: range.to, insert: code },
+      });
+    } else {
+      // Replace entire document
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: code },
+      });
+    }
+    toastSuccess("Applied", "AI suggestion applied to editor");
+  }, [viewRef]);
+
+  useEffect(() => {
+    if (responseRef.current) {
+      responseRef.current.scrollTop = responseRef.current.scrollHeight;
+    }
+  }, [response]);
+
+  return (
+    <div className="flex flex-col h-full w-[350px] border-l border-border glass-subtle shrink-0">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 h-10 border-b border-border shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 1v14M1 8h14M3 3l10 10M13 3L3 13" />
+            </svg>
+          </div>
+          <span className="text-xs font-semibold text-foreground">AI Assistant</span>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M4 4l8 8M12 4l-8 8" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Quick actions */}
+      <div className="px-3 py-2 border-b border-border shrink-0">
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Quick actions</p>
+        <div className="flex flex-wrap gap-1">
+          {AI_ACTIONS.map((action) => (
+            <button
+              key={action.label}
+              onClick={() => handleQuickAction(action)}
+              disabled={loading}
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-white/[0.04] text-muted-foreground hover:text-foreground hover:bg-white/[0.08] border border-border transition-colors disabled:opacity-40"
+            >
+              <span className="text-[10px]">{action.icon}</span>
+              {action.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[9px] text-muted-foreground/50 mt-1.5">
+          {selectionRangeRef.current ? "Using selected text" : "Using entire file"} - {fileName}
+        </p>
+      </div>
+
+      {/* Custom prompt */}
+      <div className="px-3 py-2 border-b border-border shrink-0">
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Ask a question about this code..."
+          rows={3}
+          className="w-full resize-none rounded-lg px-3 py-2 text-xs bg-white/[0.04] border border-border text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors"
+        />
+        <div className="flex items-center justify-between mt-1.5">
+          <kbd className="text-[9px] font-mono text-muted-foreground/30">
+            {navigator.platform?.includes("Mac") ? "\u2318" : "Ctrl"}+Enter to send
+          </kbd>
+          <button
+            onClick={handleSubmit}
+            disabled={!prompt.trim() || loading}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
+              prompt.trim() && !loading
+                ? "bg-primary text-primary-foreground hover:bg-primary/90 glow-sm"
+                : "bg-white/[0.04] text-muted-foreground/40 cursor-not-allowed"
+            }`}
+          >
+            {loading ? (
+              <div className="w-3 h-3 border border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+            ) : (
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 8h12M10 4l4 4-4 4" />
+              </svg>
+            )}
+            Ask
+          </button>
+        </div>
+      </div>
+
+      {/* Response area */}
+      <div ref={responseRef} className="flex-1 overflow-y-auto scrollbar-none min-h-0">
+        {loading && !response && (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-spin" />
+              <span className="text-xs text-muted-foreground">Thinking...</span>
+            </div>
+          </div>
+        )}
+
+        {aiError && (
+          <div className="mx-3 mt-3 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-red-300">
+            {aiError}
+          </div>
+        )}
+
+        {response && (
+          <div className="p-3">
+            <div className="prose-axios">
+              <Markdown
+                components={{
+                  pre: ({ children, ...props }) => {
+                    // Extract code text from the children
+                    let codeText = "";
+                    if (children && typeof children === "object" && "props" in (children as any)) {
+                      const childProps = (children as any).props;
+                      if (typeof childProps?.children === "string") {
+                        codeText = childProps.children;
+                      }
+                    }
+                    return (
+                      <div className="relative group">
+                        <pre {...props}>{children}</pre>
+                        {codeText && (
+                          <button
+                            onClick={() => applyCode(codeText.trimEnd())}
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-150"
+                          >
+                            <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="1 4 1 10 7 10" />
+                              <polyline points="15 12 15 6 9 6" />
+                            </svg>
+                            Apply
+                          </button>
+                        )}
+                      </div>
+                    );
+                  },
+                }}
+              >
+                {response}
+              </Markdown>
+            </div>
+          </div>
+        )}
+
+        {!loading && !response && !aiError && (
+          <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+            <div className="w-10 h-10 rounded-xl glass flex items-center justify-center mb-3 glow-primary">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                <path d="M8 1v14M1 8h14M3 3l10 10M13 3L3 13" />
+              </svg>
+            </div>
+            <p className="text-xs font-medium text-foreground/60 mb-1">Ask AI about your code</p>
+            <p className="text-[10px] text-muted-foreground/50">
+              Select code in the editor for targeted analysis, or use the entire file
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- FileEditor Component ---------- */
 
 interface FileEditorProps {
@@ -147,6 +439,7 @@ export function FileEditor({ filePath, fileName, onClose }: FileEditorProps) {
   const [modified, setModified] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const originalContentRef = useRef<string>("");
   const modifiedRef = useRef(false);
 
@@ -371,6 +664,22 @@ export function FileEditor({ filePath, fileName, onClose }: FileEditorProps) {
           </span>
         )}
 
+        {/* AI button */}
+        <button
+          onClick={() => setAiPanelOpen(!aiPanelOpen)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 shrink-0 ${
+            aiPanelOpen
+              ? "bg-primary/20 text-primary border-glow"
+              : "bg-white/[0.04] text-muted-foreground hover:text-foreground hover:bg-white/[0.08]"
+          }`}
+          title="AI Assistant"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 1v14M1 8h14M3 3l10 10M13 3L3 13" />
+          </svg>
+          AI
+        </button>
+
         {/* Save button */}
         <button
           onClick={handleSave}
@@ -414,21 +723,33 @@ export function FileEditor({ filePath, fileName, onClose }: FileEditorProps) {
         </div>
       )}
 
-      {/* Editor area */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {loading && (
-          <div className="flex items-center justify-center h-full">
-            <div className="flex items-center gap-3">
-              <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
-              <span className="text-xs text-muted-foreground">Loading file...</span>
+      {/* Editor + AI panel area */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Editor area */}
+        <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+          {loading && (
+            <div className="flex items-center justify-center h-full">
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
+                <span className="text-xs text-muted-foreground">Loading file...</span>
+              </div>
             </div>
-          </div>
+          )}
+          <div
+            ref={editorRef}
+            className="h-full w-full overflow-auto"
+            style={{ display: loading ? "none" : "block" }}
+          />
+        </div>
+
+        {/* AI Panel */}
+        {aiPanelOpen && (
+          <AIPanel
+            viewRef={viewRef}
+            fileName={fileName}
+            onClose={() => setAiPanelOpen(false)}
+          />
         )}
-        <div
-          ref={editorRef}
-          className="h-full w-full overflow-auto"
-          style={{ display: loading ? "none" : "block" }}
-        />
       </div>
     </div>
   );
