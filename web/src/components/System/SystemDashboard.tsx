@@ -55,7 +55,7 @@ function ProgressBar({ percent }: { percent: number }) {
           borderRadius: 6,
           background: usageGradient(clamped),
           boxShadow: usageGlow(clamped),
-          transition: "width 0.6s ease",
+          transition: "all 700ms ease",
         }}
       />
     </div>
@@ -368,6 +368,7 @@ export function SystemDashboard() {
       </style>
 
       <h2
+        className="animate-fade-up"
         style={{
           fontSize: 20,
           fontWeight: 600,
@@ -415,11 +416,11 @@ export function SystemDashboard() {
             gap: 16,
           }}
         >
-          <SystemInfoCard stats={stats} />
-          <CPUCard stats={stats} />
-          <MemoryCard stats={stats} />
-          <NetworkCard stats={stats} />
-          <DiskCards stats={stats} />
+          <div className="animate-fade-up delay-100"><SystemInfoCard stats={stats} /></div>
+          <div className="animate-fade-up delay-200"><CPUCard stats={stats} /></div>
+          <div className="animate-fade-up delay-300"><MemoryCard stats={stats} /></div>
+          <div className="animate-fade-up delay-400"><NetworkCard stats={stats} /></div>
+          <div className="animate-fade-up delay-500"><DiskCards stats={stats} /></div>
         </div>
       ) : null}
     </div>

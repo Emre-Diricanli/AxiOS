@@ -262,7 +262,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0 animate-fade-down">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center shadow-[0_0_12px_rgba(99,102,241,0.3)]">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -353,7 +353,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 scrollbar-none">
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center">
+            <div className="text-center animate-scale-in">
               <div className="w-14 h-14 mx-auto mb-4 rounded-2xl glass flex items-center justify-center glow-primary">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
@@ -366,15 +366,17 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
         )}
         {messages.map((msg) => {
           if (msg.role === "tool_use" || msg.role === "tool_result") {
-            return <ToolBlock key={msg.id} type={msg.role} toolName={msg.toolName ?? "unknown"} content={msg.content} />;
+            return <div key={msg.id} className="animate-fade-up"><ToolBlock type={msg.role} toolName={msg.toolName ?? "unknown"} content={msg.content} /></div>;
           }
-          return <MessageBubble key={msg.id} role={msg.role} content={msg.content} model={msg.model} />;
+          return <div key={msg.id} className="animate-fade-up"><MessageBubble role={msg.role} content={msg.content} model={msg.model} /></div>;
         })}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <InputBar onSend={handleSend} disabled={!connected || streaming} modelName={activeModel ?? undefined} />
+      <div className="animate-fade-up">
+        <InputBar onSend={handleSend} disabled={!connected || streaming} modelName={activeModel ?? undefined} />
+      </div>
     </div>
   );
 }

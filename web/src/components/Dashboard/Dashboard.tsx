@@ -61,17 +61,17 @@ export function Dashboard() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">
+          <h2 className="text-3xl font-bold tracking-tight animate-fade-up">
             Axi<span className="text-primary text-glow">OS</span>
           </h2>
           {stats && (
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-1 animate-fade-up delay-100">
               {stats.hostname} &middot; {stats.uptime}
             </p>
           )}
         </div>
         {stats && primaryIface && (
-          <div className="flex items-center gap-2 glass-subtle rounded-full px-4 py-2">
+          <div className="flex items-center gap-2 glass-subtle rounded-full px-4 py-2 animate-fade-up delay-200">
             <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
             <span className="text-xs font-mono text-foreground/80">{primaryIface.ip}</span>
             <span className="text-[10px] text-muted-foreground">{primaryIface.name}</span>
@@ -83,7 +83,7 @@ export function Dashboard() {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* CPU */}
-          <div className="glass rounded-2xl p-4">
+          <div className="glass rounded-2xl p-4 animate-fade-up delay-200">
             <div className="flex items-center gap-3">
               <GaugeRing percent={stats.cpu.usage_percent} />
               <div className="flex-1 min-w-0 space-y-2">
@@ -95,7 +95,7 @@ export function Dashboard() {
           </div>
 
           {/* Memory */}
-          <div className="glass rounded-2xl p-4">
+          <div className="glass rounded-2xl p-4 animate-fade-up delay-300">
             <div className="flex items-center gap-3">
               <GaugeRing percent={stats.memory.usage_percent} />
               <div className="flex-1 min-w-0 space-y-2">
@@ -108,7 +108,7 @@ export function Dashboard() {
 
           {/* Disk */}
           {stats.disk.length > 0 && (
-            <div className="glass rounded-2xl p-4">
+            <div className="glass rounded-2xl p-4 animate-fade-up delay-400">
               <div className="flex items-center gap-5">
                 <GaugeRing percent={stats.disk[0].usage_percent} />
                 <div className="flex-1 min-w-0 space-y-2">
@@ -126,7 +126,7 @@ export function Dashboard() {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* System info */}
-          <div className="glass rounded-2xl p-4 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3 animate-fade-up delay-500">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">System</h3>
             <div className="grid grid-cols-2 gap-y-3 gap-x-6">
               {[
@@ -144,7 +144,7 @@ export function Dashboard() {
           </div>
 
           {/* Network */}
-          <div className="glass rounded-2xl p-4 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3 animate-fade-up delay-600">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Network</h3>
             {stats.network.interfaces.length === 0 ? (
               <p className="text-xs text-muted-foreground">No active connections</p>
@@ -167,7 +167,7 @@ export function Dashboard() {
 
       {/* Additional storage */}
       {stats && stats.disk.length > 1 && (
-        <div className="glass rounded-2xl p-4 space-y-4">
+        <div className="glass rounded-2xl p-4 space-y-4 animate-fade-up delay-700">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">All Storage</h3>
           {stats.disk.map((d) => (
             <div key={d.mount} className="space-y-2">

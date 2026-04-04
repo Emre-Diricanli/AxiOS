@@ -81,7 +81,7 @@ export function SettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto scrollbar-none p-6">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-6 animate-fade-up">
         {/* Flash notification */}
         {saveFlash && (
           <div className="fixed top-6 right-6 z-50 px-4 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm font-medium animate-in fade-in slide-in-from-top-2">
@@ -90,7 +90,7 @@ export function SettingsPage() {
         )}
 
         {/* General */}
-        <section className="glass rounded-xl p-5 space-y-4">
+        <section className="glass rounded-xl p-5 space-y-4 animate-fade-up delay-100">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
               <circle cx="12" cy="12" r="3" />
@@ -118,7 +118,7 @@ export function SettingsPage() {
         </section>
 
         {/* AI */}
-        <section className="glass rounded-xl p-5 space-y-4">
+        <section className="glass rounded-xl p-5 space-y-4 animate-fade-up delay-200">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400">
               <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
@@ -156,7 +156,7 @@ export function SettingsPage() {
         </section>
 
         {/* Appearance */}
-        <section className="glass rounded-xl p-5 space-y-4">
+        <section className="glass rounded-xl p-5 space-y-4 animate-fade-up delay-300">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400">
               <circle cx="12" cy="12" r="10" />
@@ -208,7 +208,7 @@ export function SettingsPage() {
         </section>
 
         {/* Data */}
-        <section className="glass rounded-xl p-5 space-y-4">
+        <section className="glass rounded-xl p-5 space-y-4 animate-fade-up delay-400">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400">
               <path d="M21 5H3a2 2 0 00-2 2v10a2 2 0 002 2h18a2 2 0 002-2V7a2 2 0 00-2-2z" />
@@ -249,7 +249,7 @@ export function SettingsPage() {
         </section>
 
         {/* About */}
-        <section className="glass rounded-xl p-5 space-y-4">
+        <section className="glass rounded-xl p-5 space-y-4 animate-fade-up delay-500">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
               <circle cx="12" cy="12" r="10" />

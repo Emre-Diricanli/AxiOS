@@ -348,14 +348,14 @@ export function ModelsPage() {
       )}
 
       {/* ── Section 0: Compute Nodes ──────────────────────────── */}
-      <HostsPanel />
+      <div className="animate-fade-up"><HostsPanel /></div>
 
       {/* ── Section 0.5: Cloud Providers ───────────────────────── */}
-      <ProvidersPanel />
+      <div className="animate-fade-up delay-100"><ProvidersPanel /></div>
 
       {/* ── Section 1: Installed Models ───────────────────────── */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 animate-fade-up delay-200">
           <div>
             <h2 className="text-base font-semibold tracking-tight text-foreground">Installed Models</h2>
             <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -408,7 +408,7 @@ export function ModelsPage() {
 
       {/* ── Section 2: Model Store ────────────────────────────── */}
       <div>
-        <div className="mb-4">
+        <div className="mb-4 animate-fade-up delay-300">
           <h2 className="text-base font-semibold tracking-tight text-foreground">Model Store</h2>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             Browse and install AI models from the Ollama registry
@@ -418,7 +418,7 @@ export function ModelsPage() {
         {/* Filters */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
           {/* Category tabs */}
-          <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-1 animate-fade-down">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
@@ -486,15 +486,15 @@ export function ModelsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-            {filteredMarketplace.map((model) => {
+            {filteredMarketplace.map((model, i) => {
               const pullKey = Array.from(pulling.keys()).find(
                 (k) => k.startsWith(model.name + ":") || k === model.name
               );
               const progress = pullKey ? pulling.get(pullKey) : undefined;
 
               return (
+                <div key={model.name} className="animate-fade-up" style={{ animationDelay: `${i * 50}ms` }}>
                 <MarketplaceCard
-                  key={model.name}
                   model={model}
                   installed={isInstalled(model.name)}
                   isPulling={!!progress}
@@ -504,6 +504,7 @@ export function ModelsPage() {
                     toastInfo("Pulling model", tag);
                   }}
                 />
+                </div>
               );
             })}
           </div>

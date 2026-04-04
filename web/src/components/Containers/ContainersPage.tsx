@@ -42,7 +42,7 @@ function ModalOverlay({
         className="absolute inset-0 bg-background/60 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative glass rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto scrollbar-none mx-4 p-6 shadow-2xl">
+      <div className="relative glass rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto scrollbar-none mx-4 p-6 shadow-2xl animate-scale-in">
         {children}
       </div>
     </div>
@@ -423,7 +423,7 @@ function LogsModal({
         className="absolute inset-0 bg-background/60 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative glass rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col mx-4 shadow-2xl overflow-hidden">
+      <div className="relative glass rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col mx-4 shadow-2xl overflow-hidden animate-scale-in">
         {/* Header */}
         <div className="shrink-0 px-6 py-4 flex items-center justify-between border-b border-border">
           <div>
@@ -725,7 +725,7 @@ export function ContainersPage() {
   return (
     <div className="h-full overflow-y-auto scrollbar-none flex flex-col">
       {/* Header */}
-      <div className="shrink-0 px-6 py-5 flex items-center justify-between">
+      <div className="shrink-0 px-6 py-5 flex items-center justify-between animate-fade-up">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold tracking-tight">Containers</h2>
           <span className="rounded-full bg-primary/15 text-primary text-[11px] font-mono font-medium px-2.5 py-0.5">
@@ -796,7 +796,7 @@ export function ContainersPage() {
       {/* Container list */}
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none px-6 pb-6">
         {docker.containers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="flex flex-col items-center justify-center py-20 text-center animate-scale-in">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl glass flex items-center justify-center glow-primary">
               <svg
                 width="28"
@@ -830,9 +830,9 @@ export function ContainersPage() {
           </div>
         ) : (
           <div className="glass-subtle rounded-xl overflow-hidden divide-y divide-border">
-            {docker.containers.map((c) => (
+            {docker.containers.map((c, i) => (
+              <div key={c.id} className="animate-fade-up" style={{ animationDelay: `${i * 50}ms` }}>
               <ContainerRow
-                key={c.id}
                 container={c}
                 stat={getStatForContainer(c.id)}
                 onStart={() => docker.startContainer(c.id).then(() => toastSuccess("Container started", c.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Start failed"))}
@@ -841,6 +841,7 @@ export function ContainersPage() {
                 onRemove={() => docker.removeContainer(c.id, true).then(() => toastSuccess("Removed", c.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Remove failed"))}
                 onLogs={() => setLogsContainer(c)}
               />
+              </div>
             ))}
           </div>
         )}

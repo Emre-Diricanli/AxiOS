@@ -221,7 +221,7 @@ export function Shell() {
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
               >
-                {item.icon}
+                <span className="transition-transform duration-200 hover:scale-110">{item.icon}</span>
                 {/* Active indicator */}
                 {active && (
                   <div className="absolute -left-[13px] top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
@@ -292,18 +292,18 @@ export function Shell() {
           {/* Tab content */}
           <div className="flex-1 min-h-0 overflow-hidden mx-4 mb-4 rounded-xl glass">
             <Suspense fallback={<LoadingSpinner />}>
-              {activeTab === "dashboard" && <Dashboard />}
-              {activeTab === "files" && <FileExplorer />}
-              {activeTab === "terminal" && <Terminal className="h-full" />}
+              {activeTab === "dashboard" && <div key="dashboard" className="h-full page-enter"><Dashboard /></div>}
+              {activeTab === "files" && <div key="files" className="h-full page-enter"><FileExplorer /></div>}
+              {activeTab === "terminal" && <div key="terminal" className="h-full page-enter"><Terminal className="h-full" /></div>}
               {activeTab === "system" && (
-                <div className="h-full overflow-y-auto scrollbar-none">
+                <div key="system" className="h-full overflow-y-auto scrollbar-none page-enter">
                   <SystemDashboard />
                 </div>
               )}
-              {activeTab === "containers" && <ContainersPage />}
-              {activeTab === "models" && <ModelsPage />}
-              {activeTab === "kubernetes" && <KubernetesPlaceholder />}
-              {activeTab === "settings" && <SettingsPage />}
+              {activeTab === "containers" && <div key="containers" className="h-full page-enter"><ContainersPage /></div>}
+              {activeTab === "models" && <div key="models" className="h-full page-enter"><ModelsPage /></div>}
+              {activeTab === "kubernetes" && <div key="kubernetes" className="h-full page-enter"><KubernetesPlaceholder /></div>}
+              {activeTab === "settings" && <div key="settings" className="h-full page-enter"><SettingsPage /></div>}
             </Suspense>
           </div>
         </div>
@@ -323,7 +323,7 @@ export function Shell() {
 
             {/* Chat */}
             <div
-              className="shrink-0 min-w-0 overflow-hidden flex flex-col my-4 mr-4 rounded-xl glass"
+              className="shrink-0 min-w-0 overflow-hidden flex flex-col my-4 mr-4 rounded-xl glass transition-all duration-300"
               style={{ width: chatWidth }}
             >
               <ChatPanel newChatRef={newChatRef} />

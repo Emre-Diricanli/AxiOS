@@ -294,3 +294,8 @@
 .delay-1000 { animation-delay: 1000ms; }
 .delay-1200 { animation-delay: 1200ms; }
 .delay-1500 { animation-delay: 1500ms; }
+
+/* Smooth page transitions for tab content */
+.page-enter {
+  animation: fade-slide-up 0.4s ease-out both;
+}
