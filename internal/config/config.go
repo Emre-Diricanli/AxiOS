@@ -15,6 +15,7 @@ type Claused struct {
 	Ollama    OllamaConfig    `yaml:"ollama"`
 	Routing   RoutingConfig   `yaml:"routing"`
 	MCP       MCPConfig       `yaml:"mcp"`
+	Gateway   GatewayConfig   `yaml:"gateway"`
 }
 
 type ServerConfig struct {
@@ -42,6 +43,11 @@ type RoutingConfig struct {
 type MCPConfig struct {
 	SocketDir string   `yaml:"socket_dir"`
 	Servers   []string `yaml:"servers"`
+}
+
+type GatewayConfig struct {
+	Enabled bool   `yaml:"enabled"` // Enable CasaOS-Gateway registration
+	URL     string `yaml:"url"`     // Gateway URL (auto-discovered if empty)
 }
 
 // LoadClaused reads and parses the claused daemon configuration.

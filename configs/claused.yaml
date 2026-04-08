@@ -39,3 +39,10 @@ mcp:
   #   - axios-network
   #   - axios-git
   #   - axios-ollama
+
+gateway:
+  # CasaOS-Gateway integration (for running inside CasaOS)
+  # When enabled, claused registers its API routes with the gateway
+  # so they're accessible through the central reverse proxy.
+  enabled: false
+  # url: "http://localhost:80"  # Auto-discovered if empty

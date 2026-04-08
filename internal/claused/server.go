@@ -191,6 +191,10 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	// First-boot setup wizard
 	mux.HandleFunc("/api/setup/status", s.handleSetupStatus)
 	mux.HandleFunc("/api/setup/complete", s.handleSetupComplete)
+
+	// OpenAI-compatible API (for Open WebUI, LangChain, etc.)
+	mux.HandleFunc("/v1/models", s.handleV1Models)
+	mux.HandleFunc("/v1/chat/completions", s.handleV1ChatCompletions)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
