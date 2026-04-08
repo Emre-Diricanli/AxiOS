@@ -204,6 +204,12 @@ func main() {
 	server.BuildTools()
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 
+	// Register with CasaOS-Gateway (if enabled)
+	go server.RegisterWithGateway(addr, claused.GatewayConfig{
+		Enabled:    cfg.Gateway.Enabled,
+		GatewayURL: cfg.Gateway.URL,
+	})
+
 	logger.Info("AxiOS claused starting",
 		"addr", addr,
 		"cloud", hasCloudAuth,
