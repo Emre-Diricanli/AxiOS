@@ -1,0 +1,72 @@
+server:
+  # Bind address. Loopback-only by default — exposing axiosd on the LAN
+  # requires explicit opt-in (e.g. "0.0.0.0:3000").
+  listen: "127.0.0.1:3000"
+
+model:
+  # auto: resolve at boot — explicit provider here, then the first provider
+  # whose API-key env var is set, then the saved active provider, then a
+  # reachable local Ollama, otherwise start unconfigured (setup wizard).
+  # Or name a provider explicitly: anthropic | openai | openrouter | groq |
+  # deepseek | xai | mistral | together | fireworks | google | ollama | custom
+  provider: auto
+  # Model ID. Empty = the provider's default model.
+  id: ""
+
+# Ordered chain tried when the active provider fails with a fallback-worthy
+# error (auth, billing, rate limit, outage, ...).
+# fallback_providers:
+#   - provider: openrouter
+#     model: anthropic/claude-sonnet-4
+#   - provider: ollama
+#     model: llama3.1:8b
+fallback_providers: []
+
+opencode:
+  # Managed background coding agent (opencode serve), supervised by axiosd.
+  enabled: true
+  binary: opencode
+  port: 4097
+  workspace: ~/axios-workspace
+
+ollama:
+  enabled: true
+  host: "localhost"
+  port: 11434
+  model: "llama3.1:8b"
+
+permissions:
+  # Tiered-trust policy enforced on every model-initiated tool call.
+  # Falls back to the repo's configs/permissions.yaml (dev checkouts) and
+  # then to the built-in default policy when this file is missing.
+  path: /etc/axios/permissions.yaml
+  # How long an approval_required tool call waits for the user's
+  # approval_response before being denied.
+  approval_timeout_seconds: 120
+
+routing:
+  # auto: use cloud when available, fallback to local
+  # cloud_only: only use the active cloud provider
+  # local_only: only use Ollama (no data leaves the machine)
+  # cost_aware: track API spend, shift to local when budget depletes
+  mode: "auto"
+
+mcp:
+  socket_dir: "/tmp/axios-mcp"
+  servers:
+    - axios-fs
+    - axios-system
+  # Future servers:
+  #   - axios-docker
+  #   - axios-gpu
+  #   - axios-media
+  #   - axios-network
+  #   - axios-git
+  #   - axios-ollama
+
+gateway:
+  # CasaOS-Gateway integration (for running inside CasaOS)
+  # When enabled, axiosd registers its API routes with the gateway
+  # so they're accessible through the central reverse proxy.
+  enabled: false
+  # url: "http://localhost:80"  # Auto-discovered if empty

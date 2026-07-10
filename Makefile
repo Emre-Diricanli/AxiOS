@@ -1,4 +1,4 @@
-.PHONY: all build claused web clean dev test start stop
+.PHONY: all build axiosd web clean dev test test-web vet start stop
 
 SOCKET_DIR ?= /tmp/axios-mcp
 
@@ -6,19 +6,19 @@ all: build
 
 # Build all Go binaries
 build:
-	go build -o bin/claused ./cmd/claused
+	go build -o bin/axiosd ./cmd/axiosd
 	go build -o bin/axios-fs ./cmd/axios-fs
 	go build -o bin/axios-system ./cmd/axios-system
 
 # Build individual binaries
-claused:
-	go build -o bin/claused ./cmd/claused
+axiosd:
+	go build -o bin/axiosd ./cmd/axiosd
 
 # Web UI
 web:
 	cd web && npm install && npm run build
 
-# Development mode — MCP servers + claused + web UI
+# Development mode — MCP servers + axiosd + web UI
 dev-mcp:
 	@mkdir -p $(SOCKET_DIR)
 	@echo "Starting MCP servers..."
@@ -26,9 +26,9 @@ dev-mcp:
 	@go run ./cmd/axios-system --socket $(SOCKET_DIR)/axios-system.sock &
 	@echo "MCP servers started. Sockets in $(SOCKET_DIR)/"
 
-dev-claused:
+dev-axiosd:
 	@mkdir -p $(SOCKET_DIR)
-	go run ./cmd/claused --config configs/claused.yaml
+	go run ./cmd/axiosd --config configs/axiosd.yaml
 
 dev-web:
 	cd web && npm run dev
@@ -42,7 +42,7 @@ stop:
 
 # Run tests
 test:
-	go test ./...
+	go test ./... -race
 
 test-web:
 	cd web && npm test
@@ -57,6 +57,9 @@ clean:
 # Format and lint
 fmt:
 	go fmt ./...
+
+vet:
+	go vet ./...
 
 lint:
 	golangci-lint run

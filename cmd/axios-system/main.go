@@ -43,7 +43,7 @@ func main() {
 			},
 			"required": []string{"command"},
 		},
-		Permission: "trusted",
+		Permission: "approval_required",
 	}, handleRunCommand)
 
 	// --- system_info ---

@@ -38,9 +38,9 @@ case "${1:-start}" in
     PIDS+=($!)
     sleep 1
 
-    # 2. claused daemon
-    echo "[2/3] Starting claused daemon..."
-    go run ./cmd/claused --config configs/claused.yaml &
+    # 2. axiosd daemon
+    echo "[2/3] Starting axiosd daemon..."
+    go run ./cmd/axiosd --config configs/axiosd.yaml &
     PIDS+=($!)
     sleep 1
 
@@ -67,7 +67,7 @@ case "${1:-start}" in
     echo "Stopping AxiOS..."
     pkill -f "axios-fs" 2>/dev/null || true
     pkill -f "axios-system" 2>/dev/null || true
-    pkill -f "cmd/claused" 2>/dev/null || true
+    pkill -f "cmd/axiosd" 2>/dev/null || true
     pkill -f "vite.*axios" 2>/dev/null || true
     rm -f "$SOCKET_DIR"/*.sock
     echo "AxiOS stopped."

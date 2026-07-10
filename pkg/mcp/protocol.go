@@ -4,10 +4,10 @@ package mcp
 
 // ToolDefinition describes a tool that an MCP server exposes.
 type ToolDefinition struct {
-	Name        string              `json:"name"`
-	Description string              `json:"description"`
-	InputSchema map[string]any      `json:"inputSchema"`
-	Permission  string              `json:"permission"` // "trusted", "approval_required", "prohibited"
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
+	Permission  string         `json:"permission"` // "trusted", "approval_required", "prohibited"
 }
 
 // ToolCall represents a request to invoke a tool.
@@ -31,14 +31,14 @@ type ServerInfo struct {
 	Tools   []ToolDefinition `json:"tools"`
 }
 
-// Request is a JSON-RPC style request from claused to an MCP server.
+// Request is a JSON-RPC style request from axiosd to an MCP server.
 type Request struct {
 	Method string         `json:"method"` // "initialize", "tools/list", "tools/call"
 	ID     string         `json:"id"`
 	Params map[string]any `json:"params,omitempty"`
 }
 
-// Response is a JSON-RPC style response from an MCP server to claused.
+// Response is a JSON-RPC style response from an MCP server to axiosd.
 type Response struct {
 	ID     string `json:"id"`
 	Result any    `json:"result,omitempty"`

@@ -1,40 +1,28 @@
-tiers:
-  trusted:
-    - fs:read
-    - fs:write
-    - fs:create
-    - docker:list
-    - docker:start
-    - docker:stop
-    - docker:logs
-    - gpu:query
-    - system:status
-    - system:logs
-    - media:encode
-    - media:metadata
-    - git:read
-    - git:commit
-    - git:push
-    - network:status
-    - ollama:list
-    - ollama:query
-    - ollama:pull
-
-  approval_required:
-    - fs:delete
-    - docker:remove
-    - docker:prune
-    - system:reboot
-    - system:shutdown
-    - system:format
-    - network:firewall
-    - git:force_push
-    - system:package_install
-    - ollama:delete
-
-  prohibited:
-    - system:modify_claused
-    - system:disable_auth
-    - system:export_credentials
-    - system:modify_bootloader
-    - system:change_routing_mode
+# AxiOS permission tiers (version 2).
+#
+# Entries are keyed by actual runtime tool names ("server__tool") and support
+# "*"/"?" wildcards. The optional "tool:pattern" form additionally matches the
+# call's primary path-like argument (keys: path, file, target); a leading "~"
+# is expanded to the user's home directory. Evaluation order:
+# prohibited -> trusted -> approval_required -> default_tier.
+version: 2
+default_tier: approval_required
+prohibited:
+  - "axios-fs__write_file:/etc/axios/*"     # tool:path-pattern form, optional
+  - "axios-fs__read_file:~/.axios/providers.json"
+  - "axios-fs__read_file:~/.axios/master.key"
+trusted:
+  - "axios-fs__read_file"
+  - "axios-fs__list_directory"
+  - "axios-fs__search_files"
+  - "axios-fs__file_info"
+  - "axios-system__system_info"
+  - "axios-system__disk_usage"
+  - "axios-system__process_list"
+  - "axios-system__service_status"
+approval_required:
+  - "axios-fs__write_file"
+  - "axios-fs__delete_file"
+  - "axios-system__run_command"
+  - "axios-system__reboot"
+  - "opencode__*"

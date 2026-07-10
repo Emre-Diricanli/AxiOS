@@ -13,10 +13,11 @@ type ToolHandler func(params map[string]any) (string, error)
 
 // Server is an MCP server that listens on a Unix socket and handles tool calls.
 type Server struct {
-	info     ServerInfo
-	handlers map[string]ToolHandler
-	listener net.Listener
-	logger   *slog.Logger
+	info        ServerInfo
+	handlers    map[string]ToolHandler
+	permissions map[string]string
+	listener    net.Listener
+	logger      *slog.Logger
 }
 
 // NewServer creates a new MCP server with the given name and version.
@@ -26,8 +27,9 @@ func NewServer(name, version string) *Server {
 			Name:    name,
 			Version: version,
 		},
-		handlers: make(map[string]ToolHandler),
-		logger:   slog.Default().With("server", name),
+		handlers:    make(map[string]ToolHandler),
+		permissions: make(map[string]string),
+		logger:      slog.Default().With("server", name),
 	}
 }
 
@@ -35,6 +37,7 @@ func NewServer(name, version string) *Server {
 func (s *Server) RegisterTool(def ToolDefinition, handler ToolHandler) {
 	s.info.Tools = append(s.info.Tools, def)
 	s.handlers[def.Name] = handler
+	s.permissions[def.Name] = def.Permission
 }
 
 // Serve starts listening on the given Unix socket path.
@@ -109,6 +112,20 @@ func (s *Server) handleToolCall(req Request) Response {
 		return Response{
 			ID:    req.ID,
 			Error: &Error{Code: -32602, Message: "unknown tool: " + toolName},
+		}
+	}
+
+	// Defense in depth: never execute a tool registered as prohibited, even if
+	// the daemon is compromised into skipping its own permission check.
+	if s.permissions[toolName] == "prohibited" {
+		s.logger.Warn("rejecting prohibited tool call", "tool", toolName)
+		return Response{
+			ID: req.ID,
+			Result: ToolResult{
+				ID:      req.ID,
+				Content: "tool " + toolName + " is prohibited by permission policy",
+				IsError: true,
+			},
 		}
 	}
 

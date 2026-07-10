@@ -2,7 +2,7 @@
 /bin/
 /axios-fs
 /axios-system
-/claused
+/axiosd
 *.exe
 *.exe~
 *.dll
