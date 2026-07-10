@@ -16,15 +16,16 @@ import (
 
 // fakeOpencodeClient implements opencodeAPI for tests.
 type fakeOpencodeClient struct {
-	mu          sync.Mutex
-	permReplies []string // "sessionID/permID/response"
-	prompts     []string
-	aborted     []string
-	sessionSeq  int
-	messages    map[string][]opencode.Message
-	diffs       map[string][]opencode.FileDiff
-	createErr   error
-	promptErr   error
+	mu           sync.Mutex
+	permReplies  []string // "sessionID/permID/response"
+	prompts      []string
+	promptModels []string // "provider/model" per prompt, "" when nil
+	aborted      []string
+	sessionSeq   int
+	messages     map[string][]opencode.Message
+	diffs        map[string][]opencode.FileDiff
+	createErr    error
+	promptErr    error
 }
 
 func (f *fakeOpencodeClient) Health() error { return nil }
@@ -46,6 +47,11 @@ func (f *fakeOpencodeClient) PromptAsync(sessionID string, model *opencode.Model
 		return f.promptErr
 	}
 	f.prompts = append(f.prompts, sessionID+": "+text)
+	modelRef := ""
+	if model != nil {
+		modelRef = model.ProviderID + "/" + model.ModelID
+	}
+	f.promptModels = append(f.promptModels, modelRef)
 	return nil
 }
 

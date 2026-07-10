@@ -28,6 +28,11 @@ opencode:
   binary: opencode
   port: 4097
   workspace: ~/axios-workspace
+  # Default model for delegated coding tasks ("provider/model"). Set to
+  # "xai/grok-build-0.1" to run tasks on a SuperGrok subscription after
+  # connecting via Settings -> Providers -> xAI -> Connect SuperGrok.
+  # Empty = opencode's own default.
+  model: ""
 
 ollama:
   enabled: true

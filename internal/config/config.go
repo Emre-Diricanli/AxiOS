@@ -60,6 +60,10 @@ type OpencodeConfig struct {
 	Binary    string `yaml:"binary"`
 	Port      int    `yaml:"port"`
 	Workspace string `yaml:"workspace"`
+	// Model is the default "provider/model" for delegated coding tasks,
+	// e.g. "xai/grok-build-0.1" to run them on a SuperGrok subscription
+	// connected via /api/providers/xai/oauth. Empty = opencode's default.
+	Model string `yaml:"model"`
 }
 
 // AnthropicConfig is the deprecated legacy credential section.

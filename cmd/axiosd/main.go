@@ -153,6 +153,7 @@ func main() {
 		Binary:    cfg.Opencode.Binary,
 		Port:      cfg.Opencode.Port,
 		Workspace: cfg.Opencode.Workspace,
+		Model:     cfg.Opencode.Model,
 	}, providerStore, filepath.Join(dataDir, "opencode_tasks.json"), logger)
 	server.SetOpencodeManager(opencodeMgr)
 	if err := opencodeMgr.Start(); err != nil {

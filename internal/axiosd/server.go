@@ -59,6 +59,10 @@ type Server struct {
 	opencodeMgr *OpencodeManager
 	sinksMu     sync.Mutex
 	sinks       []wsSink // active websocket chat connections, oldest first
+
+	// xAI SuperGrok subscription OAuth (device-code flow), created lazily.
+	xaiOAuthOnce sync.Once
+	xaiOAuthFlow *XAIOAuth
 }
 
 // NewServer creates a new axiosd HTTP server.
@@ -301,6 +305,10 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/providers", s.handleProviders)
 	mux.HandleFunc("/api/providers/key", s.handleProviderKey)
 	mux.HandleFunc("/api/providers/activate", s.handleProviderActivate)
+
+	// xAI SuperGrok subscription OAuth (funds delegated opencode tasks)
+	mux.HandleFunc("/api/providers/xai/oauth/start", s.handleXAIOAuthStart)
+	mux.HandleFunc("/api/providers/xai/oauth/status", s.handleXAIOAuthStatus)
 
 	// Chat session management
 	mux.HandleFunc("/api/chat/sessions", s.handleSessionsRouter)

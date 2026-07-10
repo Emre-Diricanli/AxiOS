@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useProviders } from "@/hooks/useProviders";
+import { useXAIOAuth } from "@/hooks/useXAIOAuth";
 import type { CloudProvider } from "@/types/providers";
 import { toastSuccess, toastInfo, toastError } from "@/hooks/useToast";
 
@@ -38,6 +39,83 @@ function ProviderLogo({ name }: { name: string }) {
       <span className="text-sm font-bold text-white leading-none">
         {name.charAt(0).toUpperCase()}
       </span>
+    </div>
+  );
+}
+
+/* ── SuperGrok subscription connect (xAI card only) ────── */
+
+function SuperGrokConnect() {
+  const { status, starting, start } = useXAIOAuth();
+
+  // Connected: green badge + reconnect affordance.
+  if (status?.connected && status.state !== "pending") {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg bg-green-500/10 border border-green-500/20 px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium text-green-400">
+            SuperGrok connected
+          </p>
+          <p className="text-[10px] text-muted-foreground truncate">
+            Delegated coding tasks run on your subscription
+          </p>
+        </div>
+        <button
+          onClick={start}
+          disabled={starting}
+          className="text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0 disabled:opacity-50"
+        >
+          Reconnect
+        </button>
+      </div>
+    );
+  }
+
+  // Pending: show the user code and the approval link, poll until resolved.
+  if (status?.state === "pending") {
+    return (
+      <div className="rounded-lg glass-subtle border border-primary/20 px-3 py-2 flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] text-muted-foreground">
+            Enter this code on x.ai:
+          </span>
+          <span className="text-xs font-mono font-bold text-primary tracking-widest">
+            {status.user_code}
+          </span>
+        </div>
+        <a
+          href={status.verification_uri}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-center px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/15 text-primary border border-primary/25 hover:bg-primary/25 transition-colors"
+        >
+          Open x.ai to approve
+        </a>
+        <p className="text-[10px] text-muted-foreground animate-pulse text-center">
+          Waiting for approval…
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        onClick={start}
+        disabled={starting}
+        className="px-3 py-2 rounded-lg text-xs font-medium bg-primary/15 text-primary border border-primary/25 hover:bg-primary/25 transition-colors disabled:opacity-50"
+      >
+        {starting ? "Starting…" : "Connect SuperGrok"}
+      </button>
+      <p className="text-[10px] text-muted-foreground">
+        Sign in with your SuperGrok / X Premium+ account to run delegated
+        coding tasks on your subscription — no API key needed
+      </p>
+      {status?.state === "error" && status.error && (
+        <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-1.5 text-[10px] text-destructive">
+          {status.error}
+        </div>
+      )}
     </div>
   );
 }
@@ -303,6 +381,9 @@ function ProviderCard({
           </button>
         </div>
       )}
+
+      {/* xAI: SuperGrok subscription OAuth alongside the API-key path */}
+      {provider.id === "xai" && <SuperGrokConnect />}
 
       {/* Error */}
       {cardError && (

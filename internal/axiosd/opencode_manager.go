@@ -69,6 +69,10 @@ type OpencodeOptions struct {
 	Binary    string // executable name or path, default "opencode"
 	Port      int    // HTTP port for `opencode serve`, default 4097
 	Workspace string // working directory for delegated tasks, default ~/axios-workspace
+	// Model is the default "provider/model" for delegated tasks (e.g.
+	// "xai/grok-build-0.1" to run on a SuperGrok subscription). Empty uses
+	// opencode's own default.
+	Model string
 }
 
 // OpencodeManager supervises a background `opencode serve` process and
@@ -216,6 +220,26 @@ func (m *OpencodeManager) Enabled() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return !m.disabled
+}
+
+// RestartIfIdle terminates the opencode server so the supervisor respawns it
+// with fresh state (e.g. newly stored OAuth credentials) — but only when no
+// delegated task is in flight, so running work is never killed mid-task.
+func (m *OpencodeManager) RestartIfIdle() {
+	for _, t := range m.tasks.list() {
+		if !t.Status.terminal() {
+			m.logger.Info("opencode restart skipped — tasks in flight; new credentials apply on next natural restart")
+			return
+		}
+	}
+	m.mu.Lock()
+	proc := m.proc
+	m.mu.Unlock()
+	if proc == nil || proc.Process == nil {
+		return
+	}
+	m.logger.Info("restarting opencode server to pick up new credentials")
+	_ = proc.Process.Signal(syscall.SIGTERM)
 }
 
 func (m *OpencodeManager) setDisabled() {
@@ -512,9 +536,14 @@ func (m *OpencodeManager) available() error {
 
 // Delegate creates an opencode session in dir (default: the workspace) and
 // submits prompt asynchronously; progress lands in the task store via events.
+// A nil model falls back to the configured default (opts.Model), then to
+// opencode's own default.
 func (m *OpencodeManager) Delegate(prompt, dir string, model *opencode.ModelRef) (OpencodeTask, error) {
 	if strings.TrimSpace(prompt) == "" {
 		return OpencodeTask{}, fmt.Errorf("prompt must not be empty")
+	}
+	if model == nil && m.opts.Model != "" {
+		model = parseModelRef(m.opts.Model)
 	}
 	if err := m.available(); err != nil {
 		return OpencodeTask{}, err
