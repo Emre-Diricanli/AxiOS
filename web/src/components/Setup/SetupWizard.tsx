@@ -414,8 +414,9 @@ function StepAI({
   onBack: () => void;
   onNext: () => void;
 }) {
-  // Cloud state
-  const [provider, setProvider] = useState("anthropic");
+  // Cloud state. No provider is pre-selected — the user must explicitly
+  // choose one (empty string = "choose a provider" state).
+  const [provider, setProvider] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [cloudConnecting, setCloudConnecting] = useState(false);
@@ -488,6 +489,11 @@ function StepAI({
   }, []);
 
   const connectCloud = useCallback(async () => {
+    if (!provider) {
+      setCloudStatus("error");
+      setCloudError("Choose a provider first");
+      return;
+    }
     setCloudConnecting(true);
     setCloudStatus("idle");
     setCloudError("");
@@ -629,9 +635,13 @@ function StepAI({
                 onChange={(e) => {
                   setProvider(e.target.value);
                   setCloudStatus("idle");
+                  setCloudError("");
                 }}
                 className="w-full mb-4 px-3 py-2 rounded-lg bg-white/5 border border-border text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors"
               >
+                <option value="" disabled>
+                  Choose a provider...
+                </option>
                 {CLOUD_PROVIDERS.map((p) => (
                   <option key={p.value} value={p.value}>
                     {p.label}
@@ -689,7 +699,7 @@ function StepAI({
 
               <button
                 onClick={connectCloud}
-                disabled={!apiKey.trim() || cloudConnecting}
+                disabled={!provider || !apiKey.trim() || cloudConnecting}
                 className="w-full px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {cloudConnecting && <Spinner className="w-4 h-4" />}
@@ -1173,8 +1183,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [systemName, setSystemName] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
 
-  // AI config tracking (for summary)
-  const [cloudProvider, setCloudProvider] = useState("anthropic");
+  // AI config tracking (for summary). Empty until a provider is actually
+  // configured — nothing is assumed by default.
+  const [cloudProvider, setCloudProvider] = useState("");
   const [cloudConnected, setCloudConnected] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
 

@@ -4,9 +4,10 @@ interface MessageBubbleProps {
   role: "user" | "assistant" | "error";
   content: string;
   model?: string;
+  provider?: string;
 }
 
-export function MessageBubble({ role, content, model }: MessageBubbleProps) {
+export function MessageBubble({ role, content, model, provider }: MessageBubbleProps) {
   if (role === "error") {
     return (
       <div className="flex justify-start">
@@ -35,8 +36,10 @@ export function MessageBubble({ role, content, model }: MessageBubbleProps) {
             <Markdown>{content}</Markdown>
           </div>
         )}
-        {model && !isUser && (
-          <p className="text-[10px] text-muted-foreground mt-1.5 font-mono">{model}</p>
+        {(model || provider) && !isUser && (
+          <p className="text-[10px] text-muted-foreground mt-1.5 font-mono">
+            {[provider, model].filter(Boolean).join(" / ")}
+          </p>
         )}
       </div>
     </div>

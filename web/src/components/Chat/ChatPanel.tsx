@@ -2,8 +2,9 @@ import { useCallback, useRef, useState, useEffect, type MutableRefObject } from 
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { MessageBubble } from "./MessageBubble";
 import { ToolBlock } from "./ToolBlock";
+import { ApprovalCard } from "./ApprovalCard";
 import { InputBar } from "./InputBar";
-import type { ChatMessage } from "@/types/messages";
+import type { ApprovalStatus, ChatMessage } from "@/types/messages";
 
 interface ChatPanelProps {
   newChatRef?: MutableRefObject<(() => void) | null>;
@@ -11,10 +12,27 @@ interface ChatPanelProps {
 
 interface DisplayMessage {
   id: string;
-  role: "user" | "assistant" | "error" | "tool_use" | "tool_result";
+  role: "user" | "assistant" | "error" | "tool_use" | "tool_result" | "approval_request";
   content: string;
   model?: string;
+  provider?: string;
   toolName?: string;
+  approvalId?: string;
+  approvalStatus?: ApprovalStatus;
+}
+
+// Marks still-pending approval cards as expired. Called when a tool_result
+// or error arrives for the flow without the user having responded — the
+// daemon has already resolved the request server-side (timeout = deny).
+function expirePendingApprovals(msgs: DisplayMessage[]): DisplayMessage[] {
+  if (!msgs.some((m) => m.role === "approval_request" && m.approvalStatus === "pending")) {
+    return msgs;
+  }
+  return msgs.map((m) =>
+    m.role === "approval_request" && m.approvalStatus === "pending"
+      ? { ...m, approvalStatus: "expired" as const }
+      : m
+  );
 }
 
 interface SessionMeta {
@@ -52,18 +70,18 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const fetchSessionsRef = useRef<() => void>(() => {});
   const onMessage = useCallback((msg: ChatMessage) => {
     if (msg.type === "assistant") {
-      streamBufferRef.current += msg.content;
+      streamBufferRef.current += msg.content ?? "";
       setMessages((prev) => {
         const last = prev[prev.length - 1];
         if (last && last.role === "assistant" && last.id === "streaming") {
           return [
             ...prev.slice(0, -1),
-            { ...last, content: streamBufferRef.current, model: msg.model },
+            { ...last, content: streamBufferRef.current, model: msg.model, provider: msg.provider },
           ];
         }
         return [
           ...prev,
-          { id: "streaming", role: "assistant", content: streamBufferRef.current, model: msg.model },
+          { id: "streaming", role: "assistant", content: streamBufferRef.current, model: msg.model, provider: msg.provider },
         ];
       });
     } else if (msg.type === "tool_use") {
@@ -73,17 +91,32 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
         if (last && last.id === "streaming") {
           updated[updated.length - 1] = { ...last, id: crypto.randomUUID() };
         }
-        updated.push({ id: crypto.randomUUID(), role: "tool_use", content: msg.content, toolName: msg.toolName });
+        updated.push({ id: crypto.randomUUID(), role: "tool_use", content: msg.content ?? "", toolName: msg.toolName });
         return updated;
       });
       streamBufferRef.current = "";
-    } else if (msg.type === "tool_result") {
+    } else if (msg.type === "approval_request") {
       setMessages((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), role: "tool_result", content: msg.content, toolName: msg.toolName },
+        {
+          id: crypto.randomUUID(),
+          role: "approval_request",
+          content: msg.params !== undefined ? JSON.stringify(msg.params) : "{}",
+          toolName: msg.tool,
+          approvalId: msg.id,
+          approvalStatus: "pending",
+        },
+      ]);
+    } else if (msg.type === "tool_result") {
+      setMessages((prev) => [
+        ...expirePendingApprovals(prev),
+        { id: crypto.randomUUID(), role: "tool_result", content: msg.content ?? "", toolName: msg.toolName },
       ]);
     } else if (msg.type === "error") {
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "error", content: msg.content }]);
+      setMessages((prev) => [
+        ...expirePendingApprovals(prev),
+        { id: crypto.randomUUID(), role: "error", content: msg.content ?? "" },
+      ]);
       setStreaming(false);
     } else if (msg.type === "status" && msg.content === "done") {
       setMessages((prev) => {
@@ -101,6 +134,22 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   }, []);
 
   const { send, connected } = useWebSocket({ onMessage });
+
+  // Answer a pending approval request: notify the daemon and persist the
+  // verdict on the rendered card for the rest of the session.
+  const respondToApproval = useCallback(
+    (approvalId: string, approve: boolean) => {
+      send({ type: "approval_response", id: approvalId, approve });
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.role === "approval_request" && m.approvalId === approvalId && m.approvalStatus === "pending"
+            ? { ...m, approvalStatus: approve ? ("approved" as const) : ("denied" as const) }
+            : m
+        )
+      );
+    },
+    [send]
+  );
 
   // Fetch sessions list
   const fetchSessions = useCallback(async () => {
@@ -368,7 +417,19 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
           if (msg.role === "tool_use" || msg.role === "tool_result") {
             return <div key={msg.id} className="animate-fade-up"><ToolBlock type={msg.role} toolName={msg.toolName ?? "unknown"} content={msg.content} /></div>;
           }
-          return <div key={msg.id} className="animate-fade-up"><MessageBubble role={msg.role} content={msg.content} model={msg.model} /></div>;
+          if (msg.role === "approval_request") {
+            return (
+              <div key={msg.id} className="animate-fade-up">
+                <ApprovalCard
+                  toolName={msg.toolName ?? "unknown"}
+                  params={msg.content}
+                  status={msg.approvalStatus ?? "expired"}
+                  onRespond={(approve) => msg.approvalId && respondToApproval(msg.approvalId, approve)}
+                />
+              </div>
+            );
+          }
+          return <div key={msg.id} className="animate-fade-up"><MessageBubble role={msg.role} content={msg.content} model={msg.model} provider={msg.provider} /></div>;
         })}
         <div ref={messagesEndRef} />
       </div>
