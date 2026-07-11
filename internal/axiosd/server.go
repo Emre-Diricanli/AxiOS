@@ -330,6 +330,8 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	// Delegated coding tasks (background opencode agent)
 	mux.HandleFunc("/api/code/tasks", s.handleCodeTasks)
 	mux.HandleFunc("/api/code/tasks/", s.handleCodeTaskByID)
+	mux.HandleFunc("/api/code/models", s.handleCodeModels)
+	mux.HandleFunc("/api/code/model", s.handleCodeModel)
 
 	// First-boot setup wizard
 	mux.HandleFunc("/api/setup/status", s.handleSetupStatus)

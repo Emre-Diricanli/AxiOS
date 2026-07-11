@@ -124,6 +124,13 @@ type FileDiff struct {
 	Status    string `json:"status,omitempty"` // "added" | "deleted" | "modified"
 }
 
+// ProviderModels is one provider's usable model list as reported by
+// GET /config/providers.
+type ProviderModels struct {
+	ID     string   `json:"id"`
+	Models []string `json:"models"`
+}
+
 // PermissionAsked is the decoded Properties payload of a
 // permission.asked event. Metadata is permission-type specific (for "bash"
 // it carries the command, for "webfetch" the URL, ...) and stays raw.

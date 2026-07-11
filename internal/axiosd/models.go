@@ -436,8 +436,11 @@ func (s *Server) handleModelsInstalled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// No reachable Ollama host is a normal state (cloud-only setups) — render
+	// an empty library instead of failing the whole Models page.
 	if s.ollama == nil {
-		s.jsonError(w, "Ollama is not configured", http.StatusServiceUnavailable)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"models": []any{}, "warning": "Ollama is not configured"})
 		return
 	}
 

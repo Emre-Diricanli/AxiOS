@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -190,5 +191,95 @@ func TestDispatchToolRoutesOpencode(t *testing.T) {
 	s2 := &Server{logger: testLogger()}
 	if out := s2.dispatchTool(opencodeServerName, "delegate_task", nil); !strings.Contains(out, "not enabled") {
 		t.Errorf("nil manager dispatch = %q, want not-enabled error", out)
+	}
+}
+
+func TestCodeModelsAndDefaultModel(t *testing.T) {
+	s, m := newCodeAPITestServer(t, &fakeOpencodeClient{})
+
+	// GET /api/code/models lists provider/model ids with the current default.
+	rec := httptest.NewRecorder()
+	s.handleCodeModels(rec, httptest.NewRequest(http.MethodGet, "/api/code/models", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("models status = %d, body %s", rec.Code, rec.Body)
+	}
+	var listed struct {
+		Models  []string `json:"models"`
+		Default string   `json:"default"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"xai/grok-4.5": false, "xai/grok-4.3": false, "opencode/zen-free-model": false}
+	for _, id := range listed.Models {
+		if _, ok := want[id]; ok {
+			want[id] = true
+		}
+	}
+	for id, seen := range want {
+		if !seen {
+			t.Errorf("model %q missing from %v", id, listed.Models)
+		}
+	}
+	if listed.Default != "" {
+		t.Errorf("default = %q, want empty before override", listed.Default)
+	}
+
+	// PUT /api/code/model sets the delegated-task default.
+	rec = httptest.NewRecorder()
+	s.handleCodeModel(rec, httptest.NewRequest(http.MethodPut, "/api/code/model",
+		strings.NewReader(`{"model":"xai/grok-4.5"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set model status = %d, body %s", rec.Code, rec.Body)
+	}
+	if got := m.DefaultModel(); got != "xai/grok-4.5" {
+		t.Errorf("DefaultModel = %q", got)
+	}
+
+	// Delegated tasks now use it.
+	if _, err := m.Delegate("task", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	client := m.client.(*fakeOpencodeClient)
+	client.mu.Lock()
+	lastModel := client.promptModels[len(client.promptModels)-1]
+	client.mu.Unlock()
+	if lastModel != "xai/grok-4.5" {
+		t.Errorf("delegated prompt model = %q", lastModel)
+	}
+
+	// Malformed model rejected; clearing works.
+	rec = httptest.NewRecorder()
+	s.handleCodeModel(rec, httptest.NewRequest(http.MethodPut, "/api/code/model",
+		strings.NewReader(`{"model":"noslash"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("malformed model status = %d, want 400", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	s.handleCodeModel(rec, httptest.NewRequest(http.MethodPut, "/api/code/model",
+		strings.NewReader(`{"model":""}`)))
+	if rec.Code != http.StatusOK || m.DefaultModel() != "" {
+		t.Errorf("clearing override failed: status %d, default %q", rec.Code, m.DefaultModel())
+	}
+}
+
+func TestDefaultModelPersistsAcrossRestarts(t *testing.T) {
+	dir := t.TempDir()
+	tasksPath := filepath.Join(dir, "opencode_tasks.json")
+
+	m1 := NewOpencodeManager(OpencodeOptions{Enabled: true}, nil, tasksPath, testLogger())
+	if err := m1.SetDefaultModel("xai/grok-4.5"); err != nil {
+		t.Fatal(err)
+	}
+
+	m2 := NewOpencodeManager(OpencodeOptions{Enabled: true, Model: "config/fallback"}, nil, tasksPath, testLogger())
+	if got := m2.DefaultModel(); got != "xai/grok-4.5" {
+		t.Errorf("override not restored: DefaultModel = %q", got)
+	}
+	if err := m2.SetDefaultModel(""); err != nil {
+		t.Fatal(err)
+	}
+	if got := m2.DefaultModel(); got != "config/fallback" {
+		t.Errorf("cleared override should fall back to config: %q", got)
 	}
 }

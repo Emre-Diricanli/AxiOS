@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -154,6 +155,32 @@ func (c *Client) Diff(sessionID string) ([]FileDiff, error) {
 		return nil, err
 	}
 	return diffs, nil
+}
+
+// Providers returns the providers and models currently usable by the server
+// (i.e. with working credentials) from GET /config/providers. Verified shape
+// in v1.17.0: {"providers":[{"id":"xai","models":{"grok-4.5":{...},...}}],"default":...}.
+func (c *Client) Providers() ([]ProviderModels, error) {
+	var resp struct {
+		Providers []struct {
+			ID     string                     `json:"id"`
+			Models map[string]json.RawMessage `json:"models"`
+		} `json:"providers"`
+	}
+	if err := c.do(http.MethodGet, "/config/providers", nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	out := make([]ProviderModels, 0, len(resp.Providers))
+	for _, p := range resp.Providers {
+		models := make([]string, 0, len(p.Models))
+		for name := range p.Models {
+			models = append(models, name)
+		}
+		sort.Strings(models)
+		out = append(out, ProviderModels{ID: p.ID, Models: models})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
 }
 
 // Request bodies (legacy v1.17.0 shapes).

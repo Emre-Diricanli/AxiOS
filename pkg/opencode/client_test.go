@@ -368,3 +368,33 @@ func TestReplyPermissionRejectsInvalidResponse(t *testing.T) {
 		t.Fatal("ReplyPermission(..., \"maybe\") error = nil, want validation error")
 	}
 }
+
+func TestProviders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/config/providers" || r.Method != http.MethodGet {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		// Real v1.17.0 shape: models is an object keyed by model id.
+		w.Write([]byte(`{"providers":[
+			{"id":"xai","models":{"grok-4.5":{"name":"Grok 4.5"},"grok-4.3":{}}},
+			{"id":"opencode","models":{"free-model":{}}}
+		],"default":{"xai":"grok-4.5"}}`))
+	}))
+	defer srv.Close()
+
+	c := opencode.NewClient(srv.URL, "pw", srv.Client())
+	provs, err := c.Providers()
+	if err != nil {
+		t.Fatalf("Providers: %v", err)
+	}
+	if len(provs) != 2 {
+		t.Fatalf("providers = %+v", provs)
+	}
+	// Sorted by provider id, models sorted within.
+	if provs[0].ID != "opencode" || provs[1].ID != "xai" {
+		t.Errorf("provider order = %s, %s", provs[0].ID, provs[1].ID)
+	}
+	if len(provs[1].Models) != 2 || provs[1].Models[0] != "grok-4.3" || provs[1].Models[1] != "grok-4.5" {
+		t.Errorf("xai models = %v", provs[1].Models)
+	}
+}

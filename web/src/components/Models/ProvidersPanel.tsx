@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProviders } from "@/hooks/useProviders";
 import { useXAIOAuth } from "@/hooks/useXAIOAuth";
 import type { CloudProvider } from "@/types/providers";
@@ -45,28 +45,105 @@ function ProviderLogo({ name }: { name: string }) {
 
 /* ── SuperGrok subscription connect (xAI card only) ────── */
 
+// Picks the model delegated coding tasks run on, fed by what the managed
+// opencode server reports as usable (GET /api/code/models).
+function DelegatedModelPicker() {
+  const [models, setModels] = useState<string[]>([]);
+  const [current, setCurrent] = useState("");
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/code/models")
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data: { models: string[]; default: string }) => {
+        // Chat-capable xai models only — imagine/image/video aren't for coding.
+        setModels(
+          (data.models ?? []).filter(
+            (m) => m.startsWith("xai/") && !m.includes("imagine")
+          )
+        );
+        setCurrent(data.default ?? "");
+      })
+      .catch(() => setLoadError(true));
+  }, []);
+
+  const save = async (model: string) => {
+    setCurrent(model);
+    try {
+      const res = await fetch("/api/code/model", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toastSuccess(
+        "Coding model set",
+        model || "opencode default"
+      );
+    } catch (err) {
+      toastError(
+        "Error",
+        err instanceof Error ? err.message : "Failed to set model"
+      );
+    }
+  };
+
+  if (loadError || models.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-muted-foreground shrink-0">
+        Coding model
+      </span>
+      <div className="relative flex-1 min-w-0">
+        <select
+          value={current}
+          onChange={(e) => save(e.target.value)}
+          className="w-full px-2 py-1 pr-6 rounded-lg text-[10px] font-mono bg-secondary text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer"
+        >
+          <option value="">opencode default</option>
+          {models.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+        <svg className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 function SuperGrokConnect() {
   const { status, starting, start } = useXAIOAuth();
 
-  // Connected: green badge + reconnect affordance.
+  // Connected: green badge + delegated-model picker + reconnect affordance.
   if (status?.connected && status.state !== "pending") {
     return (
-      <div className="flex items-center justify-between gap-2 rounded-lg bg-green-500/10 border border-green-500/20 px-3 py-2">
-        <div className="min-w-0">
-          <p className="text-[11px] font-medium text-green-400">
-            SuperGrok connected
-          </p>
-          <p className="text-[10px] text-muted-foreground truncate">
-            Delegated coding tasks run on your subscription
-          </p>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-green-500/10 border border-green-500/20 px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-green-400">
+              SuperGrok connected
+            </p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              Delegated coding tasks run on your subscription
+            </p>
+          </div>
+          <button
+            onClick={start}
+            disabled={starting}
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0 disabled:opacity-50"
+          >
+            Reconnect
+          </button>
         </div>
-        <button
-          onClick={start}
-          disabled={starting}
-          className="text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0 disabled:opacity-50"
-        >
-          Reconnect
-        </button>
+        <DelegatedModelPicker />
       </div>
     );
   }

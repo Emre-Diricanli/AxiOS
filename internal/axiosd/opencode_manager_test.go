@@ -81,6 +81,13 @@ func (f *fakeOpencodeClient) Diff(sessionID string) ([]opencode.FileDiff, error)
 	return f.diffs[sessionID], nil
 }
 
+func (f *fakeOpencodeClient) Providers() ([]opencode.ProviderModels, error) {
+	return []opencode.ProviderModels{
+		{ID: "xai", Models: []string{"grok-4.3", "grok-4.5", "grok-imagine-image"}},
+		{ID: "opencode", Models: []string{"zen-free-model"}},
+	}, nil
+}
+
 func (f *fakeOpencodeClient) Events(ctx context.Context) (<-chan opencode.Event, error) {
 	ch := make(chan opencode.Event)
 	go func() { <-ctx.Done(); close(ch) }()

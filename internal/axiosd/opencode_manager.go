@@ -54,6 +54,7 @@ type opencodeAPI interface {
 	ReplyPermission(sessionID, permID, response string) error
 	Abort(sessionID string) error
 	Diff(sessionID string) ([]opencode.FileDiff, error)
+	Providers() ([]opencode.ProviderModels, error)
 	Events(ctx context.Context) (<-chan opencode.Event, error)
 }
 
@@ -99,6 +100,16 @@ type OpencodeManager struct {
 	ready    bool
 	disabled bool   // runtime-disabled: config off or binary missing
 	password string // HTTP Basic credential for this boot
+	// modelOverride is the runtime default model for delegated tasks, set
+	// via the API and persisted so it survives restarts. It wins over
+	// opts.Model; "" means no override.
+	modelOverride string
+	settingsPath  string // "" = in-memory only (tests)
+}
+
+// opencodeSettings is the persisted shape of opencode_settings.json.
+type opencodeSettings struct {
+	Model string `json:"model,omitempty"`
 }
 
 // NewOpencodeManager creates a manager. tasksPath is where delegated-task
@@ -114,15 +125,90 @@ func NewOpencodeManager(opts OpencodeOptions, ps *ProviderStore, tasksPath strin
 	if opts.Port == 0 {
 		opts.Port = 4097
 	}
-	return &OpencodeManager{
+	settingsPath := ""
+	if tasksPath != "" {
+		settingsPath = filepath.Join(filepath.Dir(tasksPath), "opencode_settings.json")
+	}
+	m := &OpencodeManager{
 		opts:          opts,
 		providerStore: ps,
 		tasks:         newOpencodeTaskStore(tasksPath, logger),
 		logger:        logger,
+		settingsPath:  settingsPath,
 		// Fail closed until Server binds the real policy.
 		check:   func(string, map[string]any) permissions.Tier { return permissions.Prohibited },
 		approve: func(context.Context, string, json.RawMessage) bool { return false },
 	}
+	m.loadSettings()
+	return m
+}
+
+// loadSettings restores the runtime model override.
+func (m *OpencodeManager) loadSettings() {
+	if m.settingsPath == "" {
+		return
+	}
+	data, err := os.ReadFile(m.settingsPath)
+	if err != nil {
+		return // missing file is the common case
+	}
+	var s opencodeSettings
+	if err := json.Unmarshal(data, &s); err != nil {
+		m.logger.Warn("failed to parse opencode settings", "path", m.settingsPath, "error", err)
+		return
+	}
+	m.modelOverride = s.Model
+}
+
+// DefaultModel returns the effective default model for delegated tasks:
+// the runtime override, else the config value, else "" (opencode's default).
+func (m *OpencodeManager) DefaultModel() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.modelOverride != "" {
+		return m.modelOverride
+	}
+	return m.opts.Model
+}
+
+// SetDefaultModel sets (or clears, with "") the runtime default model and
+// persists it. Non-empty values must be "provider/model".
+func (m *OpencodeManager) SetDefaultModel(model string) error {
+	if model != "" && parseModelRef(model) == nil {
+		return fmt.Errorf("model must be \"provider/model\", got %q", model)
+	}
+	m.mu.Lock()
+	m.modelOverride = model
+	path := m.settingsPath
+	m.mu.Unlock()
+
+	if path == "" {
+		return nil
+	}
+	data, err := json.MarshalIndent(opencodeSettings{Model: model}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+// AvailableModels lists the providers/models the running opencode server can
+// actually use (working credentials), as "provider/model" ids.
+func (m *OpencodeManager) AvailableModels() ([]string, error) {
+	if err := m.available(); err != nil {
+		return nil, err
+	}
+	provs, err := m.client.Providers()
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, p := range provs {
+		for _, model := range p.Models {
+			out = append(out, p.ID+"/"+model)
+		}
+	}
+	return out, nil
 }
 
 // bind connects the manager to the daemon's permission policy and approval
@@ -542,8 +628,10 @@ func (m *OpencodeManager) Delegate(prompt, dir string, model *opencode.ModelRef)
 	if strings.TrimSpace(prompt) == "" {
 		return OpencodeTask{}, fmt.Errorf("prompt must not be empty")
 	}
-	if model == nil && m.opts.Model != "" {
-		model = parseModelRef(m.opts.Model)
+	if model == nil {
+		if def := m.DefaultModel(); def != "" {
+			model = parseModelRef(def)
+		}
 	}
 	if err := m.available(); err != nil {
 		return OpencodeTask{}, err

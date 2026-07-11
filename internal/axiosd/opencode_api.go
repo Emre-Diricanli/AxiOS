@@ -112,6 +112,55 @@ func (s *Server) handleCodeTaskByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleCodeModels serves /api/code/models: GET lists the models the running
+// opencode server can use as "provider/model" ids plus the current default
+// for delegated tasks.
+func (s *Server) handleCodeModels(w http.ResponseWriter, r *http.Request) {
+	if !s.opencodeEnabled(w) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		s.jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	models, err := s.opencodeMgr.AvailableModels()
+	if err != nil {
+		s.jsonError(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"models":  models,
+		"default": s.opencodeMgr.DefaultModel(),
+	})
+}
+
+// handleCodeModel serves /api/code/model: PUT {"model":"provider/model"}
+// sets the default model for delegated tasks (empty clears the override).
+func (s *Server) handleCodeModel(w http.ResponseWriter, r *http.Request) {
+	if !s.opencodeEnabled(w) {
+		return
+	}
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		s.jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Model string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := s.opencodeMgr.SetDefaultModel(strings.TrimSpace(req.Model)); err != nil {
+		s.jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.logger.Info("delegated-task default model updated", "model", req.Model)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"default": s.opencodeMgr.DefaultModel()})
+}
+
 // parseModelRef splits an optional "provider/model" string into opencode's
 // addressing scheme; empty or malformed values fall back to opencode's default.
 func parseModelRef(s string) *opencode.ModelRef {
