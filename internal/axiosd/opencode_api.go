@@ -161,6 +161,32 @@ func (s *Server) handleCodeModel(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"default": s.opencodeMgr.DefaultModel()})
 }
 
+// handleCodeChatDiff serves GET /api/code/chat-diff?session=<chatSessionID>:
+// the file changes accumulated by that chat's code session.
+func (s *Server) handleCodeChatDiff(w http.ResponseWriter, r *http.Request) {
+	if !s.opencodeEnabled(w) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		s.jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	session := r.URL.Query().Get("session")
+	if session == "" {
+		session = "default"
+	}
+	diff, err := s.opencodeMgr.ChatDiff(session)
+	if err != nil {
+		s.jsonError(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if diff == nil {
+		diff = []opencode.FileDiff{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"files": diff})
+}
+
 // parseModelRef splits an optional "provider/model" string into opencode's
 // addressing scheme; empty or malformed values fall back to opencode's default.
 func parseModelRef(s string) *opencode.ModelRef {

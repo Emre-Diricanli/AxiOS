@@ -8,7 +8,8 @@ export interface ChatMessage {
     | "tool_use"
     | "tool_result"
     | "approval_request"
-    | "approval_response";
+    | "approval_response"
+    | "abort";
   content?: string;
   sessionId?: string;
   model?: string;

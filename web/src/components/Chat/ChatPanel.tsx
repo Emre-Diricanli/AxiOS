@@ -4,6 +4,8 @@ import { MessageBubble } from "./MessageBubble";
 import { ToolBlock } from "./ToolBlock";
 import { ApprovalCard } from "./ApprovalCard";
 import { InputBar } from "./InputBar";
+import { DiffBlock, type DiffFile } from "./DiffBlock";
+import { TasksDrawer } from "./TasksDrawer";
 import type { ApprovalStatus, ChatMessage } from "@/types/messages";
 
 interface ChatPanelProps {
@@ -12,9 +14,10 @@ interface ChatPanelProps {
 
 interface DisplayMessage {
   id: string;
-  role: "user" | "assistant" | "error" | "tool_use" | "tool_result" | "approval_request";
+  role: "user" | "assistant" | "error" | "tool_use" | "tool_result" | "approval_request" | "diff";
   content: string;
   thinking?: string; // model reasoning, rendered collapsed and dim
+  diffFiles?: DiffFile[]; // role "diff": file changes from a code turn
   model?: string;
   provider?: string;
   toolName?: string;
@@ -63,14 +66,20 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [codeMode, setCodeMode] = useState(false);
+  const [codeDir, setCodeDir] = useState("");
   const [activeModel, setActiveModel] = useState<string | null>(null);
+  const [activeBackend, setActiveBackend] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamBufferRef = useRef("");
   const thinkingBufferRef = useRef("");
   const fetchSessionsRef = useRef<() => void>(() => {});
+  // Refs mirror state the WS callback needs without re-subscribing.
+  const codeActiveRef = useRef(false);
+  const sessionIdRef = useRef<string | null>(null);
   const onMessage = useCallback((msg: ChatMessage) => {
     if (msg.type === "assistant" || msg.type === "thinking") {
       if (msg.type === "thinking") {
@@ -139,6 +148,22 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
       setStreaming(false);
       // Refresh session list after a response completes
       fetchSessionsRef.current();
+      // Code turns: surface the file changes the session accumulated.
+      if (codeActiveRef.current) {
+        const sid = sessionIdRef.current || "default";
+        fetch(`/api/code/chat-diff?session=${encodeURIComponent(sid)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data: { files?: DiffFile[] } | null) => {
+            const files = data?.files ?? [];
+            if (files.length === 0) return;
+            setMessages((prev) => {
+              // Replace a previous diff card so the latest state shows once.
+              const withoutOldDiff = prev.filter((m) => m.role !== "diff");
+              return [...withoutOldDiff, { id: crypto.randomUUID(), role: "diff", content: "", diffFiles: files }];
+            });
+          })
+          .catch(() => {});
+      }
     }
   }, []);
 
@@ -247,10 +272,15 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
     }
   }, [fetchSessions, sessionId]);
 
+  const codeActive = codeMode || activeBackend === "supergrok";
+  codeActiveRef.current = codeActive;
+  sessionIdRef.current = sessionId;
+
   const handleSend = useCallback(
     (content: string) => {
       const currentSessionId = sessionId || "default";
       const mode = codeMode ? ("code" as const) : undefined;
+      const directory = (codeActive && codeDir.trim()) || undefined;
       if (!sessionId) {
         // Auto-create a session if none active
         fetch("/api/chat/sessions", { method: "POST" })
@@ -261,8 +291,8 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
               setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content }]);
               setStreaming(true);
               streamBufferRef.current = "";
-      thinkingBufferRef.current = "";
-              send({ type: "user", content, sessionId: data.id, mode });
+              thinkingBufferRef.current = "";
+              send({ type: "user", content, sessionId: data.id, mode, directory });
             }
           });
         return;
@@ -271,10 +301,15 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
       setStreaming(true);
       streamBufferRef.current = "";
       thinkingBufferRef.current = "";
-      send({ type: "user", content, sessionId: currentSessionId, mode });
+      send({ type: "user", content, sessionId: currentSessionId, mode, directory });
     },
-    [send, sessionId, codeMode]
+    [send, sessionId, codeMode, codeActive, codeDir]
   );
+
+  // Stop the in-flight code turn; the daemon answers with the usual done.
+  const abortCodeTurn = useCallback(() => {
+    send({ type: "abort", sessionId: sessionId || "default" });
+  }, [send, sessionId]);
 
   // Expose createSession to parent via ref (for Command Palette "New Chat")
   useEffect(() => {
@@ -305,7 +340,10 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
     const fetchModel = () => {
       fetch("/api/models/current")
         .then((r) => r.json())
-        .then((d) => { if (d.model) setActiveModel(d.model); })
+        .then((d) => {
+          if (d.model) setActiveModel(d.model);
+          if (d.backend) setActiveBackend(d.backend);
+        })
         .catch(() => {});
     };
     fetchModel();
@@ -351,6 +389,25 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
+          {/* Code tasks toggle */}
+          <button
+            onClick={() => setTasksOpen(!tasksOpen)}
+            title="Code Tasks"
+            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+              tasksOpen
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+          </button>
           {/* History toggle */}
           <button
             onClick={() => setHistoryOpen(!historyOpen)}
@@ -373,6 +430,9 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
           </div>
         </div>
       </div>
+
+      {/* Code Tasks Panel */}
+      {tasksOpen && <TasksDrawer />}
 
       {/* Session History Panel */}
       {historyOpen && (
@@ -433,6 +493,9 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
           if (msg.role === "tool_use" || msg.role === "tool_result") {
             return <div key={msg.id} className="animate-fade-up"><ToolBlock type={msg.role} toolName={msg.toolName ?? "unknown"} content={msg.content} /></div>;
           }
+          if (msg.role === "diff") {
+            return <div key={msg.id} className="animate-fade-up"><DiffBlock files={msg.diffFiles ?? []} /></div>;
+          }
           if (msg.role === "approval_request") {
             return (
               <div key={msg.id} className="animate-fade-up">
@@ -455,9 +518,14 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
         <InputBar
           onSend={handleSend}
           disabled={!connected || streaming}
-          modelName={codeMode ? "opencode" : activeModel ?? undefined}
+          modelName={codeActive ? activeModel ?? "opencode" : activeModel ?? undefined}
           codeMode={codeMode}
           onToggleCodeMode={() => setCodeMode((v) => !v)}
+          codeActive={codeActive}
+          codeDir={codeDir}
+          onCodeDirChange={setCodeDir}
+          streaming={streaming}
+          onAbort={abortCodeTurn}
         />
       </div>
     </div>

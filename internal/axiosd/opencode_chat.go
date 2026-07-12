@@ -190,6 +190,36 @@ func (m *OpencodeManager) ChatPrompt(chatSessionID, text, dir string, sink wsSin
 	return nil
 }
 
+// opencodeSessionFor resolves the opencode session behind a chat session.
+func (m *OpencodeManager) opencodeSessionFor(chatSessionID string) (string, bool) {
+	cc := m.codeChat()
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	id, ok := cc.chatToSession[chatSessionID]
+	return id, ok
+}
+
+// AbortChatTurn cancels the in-flight work of a chat session's opencode
+// session. The resulting session.idle event closes the turn normally.
+func (m *OpencodeManager) AbortChatTurn(chatSessionID string) error {
+	sessionID, ok := m.opencodeSessionFor(chatSessionID)
+	if !ok {
+		return fmt.Errorf("no code session for chat %s", chatSessionID)
+	}
+	m.logger.Info("aborting code chat turn", "chat_session", chatSessionID, "opencode_session", sessionID)
+	return m.client.Abort(sessionID)
+}
+
+// ChatDiff returns the accumulated file changes of a chat session's opencode
+// session (empty when the chat has no code session yet).
+func (m *OpencodeManager) ChatDiff(chatSessionID string) ([]opencode.FileDiff, error) {
+	sessionID, ok := m.opencodeSessionFor(chatSessionID)
+	if !ok {
+		return nil, nil
+	}
+	return m.client.Diff(sessionID)
+}
+
 // subscriberFor returns the websocket rendering an opencode session, if any.
 func (m *OpencodeManager) subscriberFor(sessionID string) (wsSink, bool) {
 	cc := m.codeChat()

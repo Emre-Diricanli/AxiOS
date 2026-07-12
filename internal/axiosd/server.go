@@ -346,6 +346,7 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/code/tasks/", s.handleCodeTaskByID)
 	mux.HandleFunc("/api/code/models", s.handleCodeModels)
 	mux.HandleFunc("/api/code/model", s.handleCodeModel)
+	mux.HandleFunc("/api/code/chat-diff", s.handleCodeChatDiff)
 
 	// First-boot setup wizard
 	mux.HandleFunc("/api/setup/status", s.handleSetupStatus)
@@ -633,6 +634,19 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			// Route to the pending-approvals map — never treated as chat input.
 			if !s.approvals.resolve(msg.ID, msg.Approve) {
 				s.logger.Warn("approval response for unknown or expired request", "id", msg.ID)
+			}
+		case "abort":
+			// Stop an in-flight code turn; session.idle then closes the
+			// turn with the usual done status.
+			sessionID := msg.SessionID
+			if sessionID == "" {
+				sessionID = "default"
+			}
+			if s.opencodeMgr == nil {
+				break
+			}
+			if err := s.opencodeMgr.AbortChatTurn(sessionID); err != nil {
+				s.logger.Warn("code turn abort failed", "session", sessionID, "error", err)
 			}
 		case "user":
 			select {

@@ -345,3 +345,38 @@ func TestPinnedChatUsesSuperGrokLabels(t *testing.T) {
 		t.Errorf("labels = %+v, want SuperGrok / grok-4.5", got)
 	}
 }
+
+func TestAbortChatTurnAndChatDiff(t *testing.T) {
+	client := &fakeOpencodeClient{
+		diffs: map[string][]opencode.FileDiff{
+			"ses_1": {{File: "main.go", Additions: 2, Deletions: 1, Status: "modified"}},
+		},
+	}
+	m := newTestOpencodeManager(t, client)
+
+	// No code session yet: abort errors, diff is empty (not an error).
+	if err := m.AbortChatTurn("chat-1"); err == nil {
+		t.Error("abort without a code session should error")
+	}
+	if diff, err := m.ChatDiff("chat-1"); err != nil || diff != nil {
+		t.Errorf("diff without a code session = (%v, %v), want (nil, nil)", diff, err)
+	}
+
+	if err := m.ChatPrompt("chat-1", "work", "", &fakeSink{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.AbortChatTurn("chat-1"); err != nil {
+		t.Fatalf("AbortChatTurn: %v", err)
+	}
+	client.mu.Lock()
+	aborted := append([]string(nil), client.aborted...)
+	client.mu.Unlock()
+	if len(aborted) != 1 || aborted[0] != "ses_1" {
+		t.Errorf("aborted = %v, want [ses_1]", aborted)
+	}
+
+	diff, err := m.ChatDiff("chat-1")
+	if err != nil || len(diff) != 1 || diff[0].File != "main.go" {
+		t.Errorf("ChatDiff = (%+v, %v)", diff, err)
+	}
+}
