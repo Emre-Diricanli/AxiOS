@@ -59,10 +59,46 @@ type Server struct {
 	opencodeMgr *OpencodeManager
 	sinksMu     sync.Mutex
 	sinks       []wsSink // active websocket chat connections, oldest first
+	metricsMu   sync.RWMutex
+	inference   InferenceMetrics
 
 	// xAI SuperGrok subscription OAuth (device-code flow), created lazily.
 	xaiOAuthOnce sync.Once
 	xaiOAuthFlow *XAIOAuth
+}
+
+// InferenceMetrics describes the latest completed provider request.
+type InferenceMetrics struct {
+	Provider        string    `json:"provider"`
+	Model           string    `json:"model"`
+	InputTokens     int       `json:"input_tokens"`
+	OutputTokens    int       `json:"output_tokens"`
+	DurationMS      int64     `json:"duration_ms"`
+	TokensPerSecond float64   `json:"tokens_per_second"`
+	CompletedAt     time.Time `json:"completed_at"`
+}
+
+func (s *Server) recordInference(provider, model string, usage providers.Usage, duration time.Duration) {
+	metric := InferenceMetrics{
+		Provider:     provider,
+		Model:        model,
+		InputTokens:  usage.InputTokens,
+		OutputTokens: usage.OutputTokens,
+		DurationMS:   duration.Milliseconds(),
+		CompletedAt:  time.Now(),
+	}
+	if duration > 0 && usage.OutputTokens > 0 {
+		metric.TokensPerSecond = float64(usage.OutputTokens) / duration.Seconds()
+	}
+	s.metricsMu.Lock()
+	s.inference = metric
+	s.metricsMu.Unlock()
+}
+
+func (s *Server) inferenceMetrics() InferenceMetrics {
+	s.metricsMu.RLock()
+	defer s.metricsMu.RUnlock()
+	return s.inference
 }
 
 // NewServer creates a new axiosd HTTP server.
@@ -97,6 +133,8 @@ You have access to system tools that let you:
 - axios-fs > list_directory: Browse directories
 - axios-fs > search_files: Find files by pattern
 - axios-fs > file_info: Get file metadata (size, permissions, dates)
+- axios-docker > list_containers / container_info / container_logs / list_images / docker_stats: Inspect Docker
+- axios-docker > start_container / stop_container / restart_container / remove_container / pull_image / run_container / compose_up / compose_down: Manage Docker (user approval required)
 
 IMPORTANT: When the user asks you to DO something, USE THE TOOLS TO DO IT. Never just show commands or explain how — actually execute them using run_command or the appropriate tool.
 
@@ -375,6 +413,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			status["model"] = model
 		}
 		status["localModel"] = s.runtime.LocalModel()
+	}
+	if inference := s.inferenceMetrics(); !inference.CompletedAt.IsZero() {
+		status["inference"] = inference
 	}
 	json.NewEncoder(w).Encode(status)
 }

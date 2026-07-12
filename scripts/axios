@@ -35,6 +35,7 @@ case "${1:-start}" in
     go run ./cmd/axios-fs --socket "$SOCKET_DIR/axios-fs.sock" &
     PIDS+=($!)
     go run ./cmd/axios-system --socket "$SOCKET_DIR/axios-system.sock" &
+    go run ./cmd/axios-docker --socket "$SOCKET_DIR/axios-docker.sock" &
     PIDS+=($!)
     sleep 1
 
@@ -67,6 +68,7 @@ case "${1:-start}" in
     echo "Stopping AxiOS..."
     pkill -f "axios-fs" 2>/dev/null || true
     pkill -f "axios-system" 2>/dev/null || true
+    pkill -f "axios-docker" 2>/dev/null || true
     pkill -f "cmd/axiosd" 2>/dev/null || true
     pkill -f "vite.*axios" 2>/dev/null || true
     rm -f "$SOCKET_DIR"/*.sock

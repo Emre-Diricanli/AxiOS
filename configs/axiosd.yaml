@@ -61,8 +61,8 @@ mcp:
   servers:
     - axios-fs
     - axios-system
+    - axios-docker
   # Future servers:
-  #   - axios-docker
   #   - axios-gpu
   #   - axios-media
   #   - axios-network
