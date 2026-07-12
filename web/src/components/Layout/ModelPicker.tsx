@@ -166,7 +166,10 @@ export function ModelPicker() {
         className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg glass-subtle hover:bg-accent transition-colors"
       >
         <BackendBadge backend={active?.backend ?? "cloud"} small />
-        <span className="text-[11px] font-mono text-foreground/80 max-w-[120px] truncate">
+        <span
+          key={displayName}
+          className="text-[11px] font-mono text-foreground/80 max-w-[120px] truncate animate-scale-in"
+        >
           {displayName}
         </span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-muted-foreground shrink-0">

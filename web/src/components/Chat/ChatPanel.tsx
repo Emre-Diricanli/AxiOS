@@ -14,6 +14,7 @@ interface DisplayMessage {
   id: string;
   role: "user" | "assistant" | "error" | "tool_use" | "tool_result" | "approval_request";
   content: string;
+  thinking?: string; // model reasoning, rendered collapsed and dim
   model?: string;
   provider?: string;
   toolName?: string;
@@ -68,22 +69,27 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamBufferRef = useRef("");
+  const thinkingBufferRef = useRef("");
   const fetchSessionsRef = useRef<() => void>(() => {});
   const onMessage = useCallback((msg: ChatMessage) => {
-    if (msg.type === "assistant") {
-      streamBufferRef.current += msg.content ?? "";
+    if (msg.type === "assistant" || msg.type === "thinking") {
+      if (msg.type === "thinking") {
+        thinkingBufferRef.current += msg.content ?? "";
+      } else {
+        streamBufferRef.current += msg.content ?? "";
+      }
       setMessages((prev) => {
         const last = prev[prev.length - 1];
+        const patch = {
+          content: streamBufferRef.current,
+          thinking: thinkingBufferRef.current || undefined,
+          model: msg.model,
+          provider: msg.provider,
+        };
         if (last && last.role === "assistant" && last.id === "streaming") {
-          return [
-            ...prev.slice(0, -1),
-            { ...last, content: streamBufferRef.current, model: msg.model, provider: msg.provider },
-          ];
+          return [...prev.slice(0, -1), { ...last, ...patch }];
         }
-        return [
-          ...prev,
-          { id: "streaming", role: "assistant", content: streamBufferRef.current, model: msg.model, provider: msg.provider },
-        ];
+        return [...prev, { id: "streaming", role: "assistant", ...patch }];
       });
     } else if (msg.type === "tool_use") {
       setMessages((prev) => {
@@ -96,6 +102,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
         return updated;
       });
       streamBufferRef.current = "";
+      thinkingBufferRef.current = "";
     } else if (msg.type === "approval_request") {
       setMessages((prev) => [
         ...prev,
@@ -128,6 +135,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
         return prev;
       });
       streamBufferRef.current = "";
+      thinkingBufferRef.current = "";
       setStreaming(false);
       // Refresh session list after a response completes
       fetchSessionsRef.current();
@@ -177,6 +185,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
         setSessionId(data.id);
         setMessages([]);
         streamBufferRef.current = "";
+        thinkingBufferRef.current = "";
         await fetchSessions();
       }
     } catch {
@@ -189,6 +198,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
     setSessionId(id);
     setMessages([]);
     streamBufferRef.current = "";
+    thinkingBufferRef.current = "";
     setHistoryOpen(false);
     try {
       const res = await fetch(`/api/chat/sessions/messages?id=${id}`);
@@ -251,6 +261,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
               setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content }]);
               setStreaming(true);
               streamBufferRef.current = "";
+      thinkingBufferRef.current = "";
               send({ type: "user", content, sessionId: data.id, mode });
             }
           });
@@ -259,6 +270,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content }]);
       setStreaming(true);
       streamBufferRef.current = "";
+      thinkingBufferRef.current = "";
       send({ type: "user", content, sessionId: currentSessionId, mode });
     },
     [send, sessionId, codeMode]
@@ -322,7 +334,9 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
           </div>
           <div>
             <span className="text-sm font-semibold">Axi<span className="text-primary">OS</span></span>
-            <p className="text-[10px] text-muted-foreground">{activeModel ?? "System Intelligence"}</p>
+            <p key={activeModel ?? "none"} className="text-[10px] text-muted-foreground animate-scale-in">
+              {activeModel ?? "System Intelligence"}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -431,7 +445,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
               </div>
             );
           }
-          return <div key={msg.id} className="animate-fade-up"><MessageBubble role={msg.role} content={msg.content} model={msg.model} provider={msg.provider} /></div>;
+          return <div key={msg.id} className="animate-fade-up"><MessageBubble role={msg.role} content={msg.content} thinking={msg.thinking} model={msg.model} provider={msg.provider} /></div>;
         })}
         <div ref={messagesEndRef} />
       </div>

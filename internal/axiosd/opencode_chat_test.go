@@ -290,3 +290,58 @@ func TestChatModelPinRoutesAndPersists(t *testing.T) {
 		t.Errorf("after restart: chat=%q default=%q", m2.ChatModel(), m2.DefaultModel())
 	}
 }
+
+func TestReasoningDeltasStreamAsThinking(t *testing.T) {
+	client := &fakeOpencodeClient{}
+	m := newTestOpencodeManager(t, client)
+	sink := &fakeSink{}
+	if err := m.ChatPrompt("chat-1", "hi", "", sink); err != nil {
+		t.Fatal(err)
+	}
+
+	// The reasoning part announces itself via message.part.updated first.
+	partProps, _ := json.Marshal(map[string]any{
+		"sessionID": "ses_1",
+		"part":      map[string]any{"id": "prt_r1", "type": "reasoning"},
+	})
+	m.handleEvent(opencode.Event{Type: opencode.EventMessagePartUpdated, Properties: partProps})
+	textProps, _ := json.Marshal(map[string]any{
+		"sessionID": "ses_1",
+		"part":      map[string]any{"id": "prt_t1", "type": "text"},
+	})
+	m.handleEvent(opencode.Event{Type: opencode.EventMessagePartUpdated, Properties: textProps})
+
+	// Both stream deltas with field "text" — only the part type separates them.
+	d1, _ := json.Marshal(opencode.PartDelta{SessionID: "ses_1", PartID: "prt_r1", Field: "text", Delta: "The user is greeting me. "})
+	m.handleEvent(opencode.Event{Type: opencode.EventMessagePartDelta, Properties: d1})
+	d2, _ := json.Marshal(opencode.PartDelta{SessionID: "ses_1", PartID: "prt_t1", Field: "text", Delta: "Hey! What do you need?"})
+	m.handleEvent(opencode.Event{Type: opencode.EventMessagePartDelta, Properties: d2})
+
+	thinking := sink.byType("thinking")
+	answers := sink.byType("assistant")
+	if len(thinking) != 1 || !strings.Contains(thinking[0].Content, "greeting") {
+		t.Errorf("thinking = %+v", thinking)
+	}
+	if len(answers) != 1 || answers[0].Content != "Hey! What do you need?" {
+		t.Errorf("assistant = %+v", answers)
+	}
+}
+
+func TestPinnedChatUsesSuperGrokLabels(t *testing.T) {
+	client := &fakeOpencodeClient{}
+	m := newTestOpencodeManager(t, client)
+	if err := m.SetChatModel("xai/grok-4.5"); err != nil {
+		t.Fatal(err)
+	}
+	sink := &fakeSink{}
+	if err := m.ChatPrompt("chat-1", "hi", "", sink); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := json.Marshal(opencode.PartDelta{SessionID: "ses_1", PartID: "prt_1", Field: "text", Delta: "Hello"})
+	m.handleEvent(opencode.Event{Type: opencode.EventMessagePartDelta, Properties: d})
+
+	got := sink.byType("assistant")
+	if len(got) != 1 || got[0].Provider != "SuperGrok" || got[0].Model != "grok-4.5" {
+		t.Errorf("labels = %+v, want SuperGrok / grok-4.5", got)
+	}
+}

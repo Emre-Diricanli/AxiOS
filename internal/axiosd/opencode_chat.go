@@ -28,6 +28,11 @@ type codeChatState struct {
 	// toolStates dedups tool part updates: opencode session id -> callID ->
 	// last forwarded status.
 	toolStates map[string]map[string]string
+	// partTypes remembers each part's type (opencode session id -> part id
+	// -> type) so text deltas can be told apart from reasoning deltas —
+	// both stream with field "text", and reasoning must not render as the
+	// assistant's answer.
+	partTypes map[string]map[string]string
 	// pendingQuestions maps opencode session id -> the question awaiting the
 	// user's next chat message.
 	pendingQuestions map[string]opencode.QuestionAsked
@@ -50,6 +55,7 @@ func (m *OpencodeManager) codeChat() *codeChatState {
 			chatToSession:    map[string]string{},
 			subscribers:      map[string]wsSink{},
 			toolStates:       map[string]map[string]string{},
+			partTypes:        map[string]map[string]string{},
 			pendingQuestions: map[string]opencode.QuestionAsked{},
 		}
 		m.loadCodeSessions()
@@ -208,16 +214,28 @@ func (m *OpencodeManager) chatSessionFor(sessionID string) (string, bool) {
 
 // codeModelLabel is the Model shown on streamed code-chat messages.
 func (m *OpencodeManager) codeModelLabel() string {
+	label := "opencode"
 	if pinned := m.ChatModel(); pinned != "" {
-		return pinned
+		label = pinned
+	} else if def := m.DefaultModel(); def != "" {
+		label = def
 	}
-	if def := m.DefaultModel(); def != "" {
-		return def
+	return strings.TrimPrefix(label, "xai/")
+}
+
+// codeProviderLabel is the Provider shown on streamed code-chat messages:
+// a pinned subscription model reads as SuperGrok, not as opencode plumbing.
+func (m *OpencodeManager) codeProviderLabel() string {
+	if m.ChatModel() != "" {
+		return "SuperGrok"
 	}
 	return "opencode"
 }
 
-// handleCodeDelta forwards assistant text deltas to the session's websocket.
+// handleCodeDelta forwards streamed deltas to the session's websocket.
+// Reasoning parts stream with field "text" just like answer parts, so the
+// part type (learned from message.part.updated) decides whether a delta is
+// the assistant's answer or its thinking.
 func (m *OpencodeManager) handleCodeDelta(props json.RawMessage) {
 	var d opencode.PartDelta
 	if err := json.Unmarshal(props, &d); err != nil || d.Field != "text" || d.Delta == "" {
@@ -227,10 +245,20 @@ func (m *OpencodeManager) handleCodeDelta(props json.RawMessage) {
 	if !ok {
 		return
 	}
+
+	cc := m.codeChat()
+	cc.mu.Lock()
+	partType := cc.partTypes[d.SessionID][d.PartID]
+	cc.mu.Unlock()
+
+	msgType := "assistant"
+	if partType == "reasoning" {
+		msgType = "thinking"
+	}
 	m.writeSink(sink, ChatMessage{
-		Type:     "assistant",
+		Type:     msgType,
 		Content:  d.Delta,
-		Provider: "opencode",
+		Provider: m.codeProviderLabel(),
 		Model:    m.codeModelLabel(),
 	})
 }
@@ -242,6 +270,21 @@ func (m *OpencodeManager) handleCodePartUpdated(props json.RawMessage) {
 	if err := json.Unmarshal(props, &u); err != nil {
 		return
 	}
+
+	// Remember every part's type so delta classification (answer vs
+	// thinking) works; parts announce themselves here before streaming.
+	if u.Part.ID != "" && u.Part.Type != "" {
+		cc := m.codeChat()
+		cc.mu.Lock()
+		types := cc.partTypes[u.SessionID]
+		if types == nil {
+			types = map[string]string{}
+			cc.partTypes[u.SessionID] = types
+		}
+		types[u.Part.ID] = u.Part.Type
+		cc.mu.Unlock()
+	}
+
 	st := u.Part.ToolState()
 	if st == nil {
 		return
@@ -334,7 +377,7 @@ func (m *OpencodeManager) handleCodeQuestion(props json.RawMessage) {
 	m.writeSink(sink, ChatMessage{
 		Type:     "assistant",
 		Content:  b.String(),
-		Provider: "opencode",
+		Provider: m.codeProviderLabel(),
 		Model:    m.codeModelLabel(),
 	})
 	m.writeSink(sink, ChatMessage{Type: "status", Content: "done"})
@@ -355,6 +398,7 @@ func (m *OpencodeManager) finishCodeTurn(sessionID, errDetail string) {
 	cc.mu.Lock()
 	_, questionPending := cc.pendingQuestions[sessionID]
 	delete(cc.toolStates, sessionID)
+	delete(cc.partTypes, sessionID)
 	onComplete := cc.onTurnComplete
 	cc.mu.Unlock()
 	if questionPending && errDetail == "" {

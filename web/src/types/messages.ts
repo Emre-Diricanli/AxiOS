@@ -2,6 +2,7 @@ export interface ChatMessage {
   type:
     | "user"
     | "assistant"
+    | "thinking"
     | "error"
     | "status"
     | "tool_use"
