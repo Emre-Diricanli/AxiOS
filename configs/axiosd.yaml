@@ -63,10 +63,10 @@ mcp:
     - axios-system
     - axios-docker
     - axios-ollama
+    - axios-network
   # Future servers:
   #   - axios-gpu
   #   - axios-media
-  #   - axios-network
   #   - axios-git
 
 gateway:

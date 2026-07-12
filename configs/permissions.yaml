@@ -28,6 +28,10 @@ trusted:
   - "axios-ollama__list_models"
   - "axios-ollama__model_info"
   - "axios-ollama__ollama_status"
+  - "axios-network__list_interfaces"
+  - "axios-network__dns_lookup"
+  - "axios-network__ping_host"
+  - "axios-network__tailscale_status"
 approval_required:
   - "axios-fs__write_file"
   - "axios-fs__delete_file"
@@ -43,4 +47,6 @@ approval_required:
   - "axios-docker__compose_down"
   - "axios-ollama__pull_model"
   - "axios-ollama__delete_model"
+  - "axios-network__tailscale_up"
+  - "axios-network__tailscale_down"
   - "opencode__*"
