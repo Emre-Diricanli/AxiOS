@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* @base-ui/react emits data-orientation="horizontal|vertical"; map the
+   data-horizontal:/data-vertical: variants used by ui/separator and ui/tabs
+   onto it (without these the variants never match and the rules are dead). */
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+
 @theme inline {
   --color-background: #08080c;
   --color-foreground: #e4e4ec;
