@@ -407,6 +407,23 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// SuperGrok chat models served through the opencode bridge
+	if s.opencodeMgr != nil && s.opencodeMgr.Enabled() {
+		if avail, err := s.opencodeMgr.AvailableModels(); err == nil {
+			pinned := s.opencodeMgr.ChatModel()
+			for _, id := range avail {
+				if !strings.HasPrefix(id, "xai/") || strings.Contains(id, "imagine") {
+					continue
+				}
+				models = append(models, modelInfo{
+					Name:    strings.TrimPrefix(id, "xai/"),
+					Backend: "supergrok",
+					Active:  id == pinned,
+				})
+			}
+		}
+	}
+
 	// Local models from Ollama
 	if s.ollama != nil {
 		ollamaModels, err := s.ollama.ListModels()
@@ -431,6 +448,19 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCurrentModel(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	// A pinned SuperGrok chat model overrides the provider-layer routing.
+	if s.opencodeMgr != nil {
+		if pinned := s.opencodeMgr.ChatModel(); pinned != "" {
+			json.NewEncoder(w).Encode(map[string]any{
+				"model":    strings.TrimPrefix(pinned, "xai/"),
+				"backend":  "supergrok",
+				"provider": "xAI (SuperGrok)",
+			})
+			return
+		}
+	}
+
 	backend := s.router.Route()
 	model := ""
 	providerName := ""
@@ -471,7 +501,30 @@ func (s *Server) handleSwitchModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Switching to a provider-layer backend releases any SuperGrok chat pin.
+	clearChatPin := func() {
+		if s.opencodeMgr != nil {
+			if err := s.opencodeMgr.SetChatModel(""); err != nil {
+				s.logger.Warn("failed to clear SuperGrok chat pin", "error", err)
+			}
+		}
+	}
+
 	switch req.Backend {
+	case "supergrok":
+		if s.opencodeMgr == nil || !s.opencodeMgr.Enabled() {
+			s.jsonError(w, "opencode integration disabled", http.StatusBadRequest)
+			return
+		}
+		model := req.Model
+		if !strings.Contains(model, "/") {
+			model = "xai/" + model
+		}
+		if err := s.opencodeMgr.SetChatModel(model); err != nil {
+			s.jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		s.logger.Info("chat pinned to SuperGrok model via opencode", "model", model)
 	case "cloud":
 		if s.providerStore == nil {
 			s.jsonError(w, "no cloud credentials configured", http.StatusBadRequest)
@@ -497,6 +550,7 @@ func (s *Server) handleSwitchModel(w http.ResponseWriter, r *http.Request) {
 		}
 		s.router.SetCloudAvailable(true)
 		s.router.mode = RouteCloudOnly
+		clearChatPin()
 		s.logger.Info("switched to cloud model", "provider", providerID, "model", req.Model)
 	case "local":
 		if s.ollama == nil {
@@ -507,6 +561,7 @@ func (s *Server) handleSwitchModel(w http.ResponseWriter, r *http.Request) {
 			s.runtime.SetLocalModel(req.Model)
 		}
 		s.router.mode = RouteLocalOnly
+		clearChatPin()
 		s.logger.Info("switched to local model", "model", req.Model)
 	default:
 		s.jsonError(w, "backend must be 'cloud' or 'local'", http.StatusBadRequest)
@@ -604,8 +659,9 @@ func (s *Server) handleUserChatMessage(ctx context.Context, sink wsSink, msg Cha
 
 	// Code mode: the turn runs on an interactive opencode session; progress
 	// streams back via the manager's event bridge, which also emits the
-	// closing "done" status when the session goes idle.
-	if msg.Mode == "code" {
+	// closing "done" status when the session goes idle. A pinned SuperGrok
+	// chat model (picker selection) routes every turn this way.
+	if msg.Mode == "code" || (s.opencodeMgr != nil && s.opencodeMgr.ChatModel() != "") {
 		if s.opencodeMgr == nil {
 			s.sendMessage(sink, ChatMessage{Type: "error", Content: "code mode requires the opencode integration"})
 			s.sendMessage(sink, ChatMessage{Type: "status", Content: "done"})

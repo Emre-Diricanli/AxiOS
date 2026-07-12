@@ -106,14 +106,19 @@ type OpencodeManager struct {
 	// via the API and persisted so it survives restarts. It wins over
 	// opts.Model; "" means no override.
 	modelOverride string
-	settingsPath  string // "" = in-memory only (tests)
+	// chatModel, when set (e.g. "xai/grok-4.5"), routes ALL chat turns
+	// through the opencode bridge on that model — this is how a SuperGrok
+	// model selected in the UI model picker becomes the chat backend.
+	chatModel    string
+	settingsPath string // "" = in-memory only (tests)
 	// chat is the interactive code-chat bridge state (lazy; see codeChat()).
 	chat *codeChatState
 }
 
 // opencodeSettings is the persisted shape of opencode_settings.json.
 type opencodeSettings struct {
-	Model string `json:"model,omitempty"`
+	Model     string `json:"model,omitempty"`
+	ChatModel string `json:"chat_model,omitempty"`
 }
 
 // NewOpencodeManager creates a manager. tasksPath is where delegated-task
@@ -162,6 +167,23 @@ func (m *OpencodeManager) loadSettings() {
 		return
 	}
 	m.modelOverride = s.Model
+	m.chatModel = s.ChatModel
+}
+
+// saveSettings persists the full runtime settings (caller must NOT hold m.mu).
+func (m *OpencodeManager) saveSettings() error {
+	m.mu.Lock()
+	s := opencodeSettings{Model: m.modelOverride, ChatModel: m.chatModel}
+	path := m.settingsPath
+	m.mu.Unlock()
+	if path == "" {
+		return nil
+	}
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
 }
 
 // DefaultModel returns the effective default model for delegated tasks:
@@ -183,17 +205,28 @@ func (m *OpencodeManager) SetDefaultModel(model string) error {
 	}
 	m.mu.Lock()
 	m.modelOverride = model
-	path := m.settingsPath
 	m.mu.Unlock()
+	return m.saveSettings()
+}
 
-	if path == "" {
-		return nil
+// ChatModel returns the model chat turns are pinned to via the opencode
+// bridge ("" = chat uses the provider layer).
+func (m *OpencodeManager) ChatModel() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.chatModel
+}
+
+// SetChatModel pins chat turns to an opencode-served model (or clears the
+// pin with ""). Non-empty values must be "provider/model".
+func (m *OpencodeManager) SetChatModel(model string) error {
+	if model != "" && parseModelRef(model) == nil {
+		return fmt.Errorf("model must be \"provider/model\", got %q", model)
 	}
-	data, err := json.MarshalIndent(opencodeSettings{Model: model}, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o600)
+	m.mu.Lock()
+	m.chatModel = model
+	m.mu.Unlock()
+	return m.saveSettings()
 }
 
 // AvailableModels lists the providers/models the running opencode server can

@@ -170,8 +170,12 @@ func (m *OpencodeManager) ChatPrompt(chatSessionID, text, dir string, sink wsSin
 	cc.subscribers[sessionID] = sink
 	cc.mu.Unlock()
 
+	// Chat turns prefer the pinned chat model (picker selection), then the
+	// delegated-task default, then opencode's own default.
 	var model *opencode.ModelRef
-	if def := m.DefaultModel(); def != "" {
+	if pinned := m.ChatModel(); pinned != "" {
+		model = parseModelRef(pinned)
+	} else if def := m.DefaultModel(); def != "" {
 		model = parseModelRef(def)
 	}
 	if err := m.client.PromptAsync(sessionID, model, text); err != nil {
@@ -204,6 +208,9 @@ func (m *OpencodeManager) chatSessionFor(sessionID string) (string, bool) {
 
 // codeModelLabel is the Model shown on streamed code-chat messages.
 func (m *OpencodeManager) codeModelLabel() string {
+	if pinned := m.ChatModel(); pinned != "" {
+		return pinned
+	}
 	if def := m.DefaultModel(); def != "" {
 		return def
 	}

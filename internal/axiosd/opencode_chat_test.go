@@ -234,3 +234,57 @@ func TestCodeSessionMappingPersists(t *testing.T) {
 		t.Errorf("prompts = %v, want continuation on ses_1", client2.prompts)
 	}
 }
+
+func TestChatModelPinRoutesAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	tasksPath := dir + "/opencode_tasks.json"
+
+	m := NewOpencodeManager(OpencodeOptions{Enabled: true, Workspace: t.TempDir()}, nil, tasksPath, testLogger())
+	client := &fakeOpencodeClient{}
+	m.client = client
+	m.ready = true
+
+	s := &Server{logger: testLogger()}
+	s.SetOpencodeManager(m)
+
+	// Pin via the switch endpoint (bare name gets the xai/ prefix).
+	rec := httptest.NewRecorder()
+	s.handleSwitchModel(rec, httptest.NewRequest(http.MethodPost, "/api/models/switch",
+		strings.NewReader(`{"model":"grok-4.5","backend":"supergrok"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("switch status = %d, body %s", rec.Code, rec.Body)
+	}
+	if got := m.ChatModel(); got != "xai/grok-4.5" {
+		t.Fatalf("ChatModel = %q", got)
+	}
+
+	// Current-model reflects the pin.
+	rec = httptest.NewRecorder()
+	s.handleCurrentModel(rec, httptest.NewRequest(http.MethodGet, "/api/models/current", nil))
+	var cur struct{ Model, Backend, Provider string }
+	if err := json.Unmarshal(rec.Body.Bytes(), &cur); err != nil {
+		t.Fatal(err)
+	}
+	if cur.Model != "grok-4.5" || cur.Backend != "supergrok" {
+		t.Errorf("current = %+v", cur)
+	}
+
+	// Chat turns use the pinned model through the bridge.
+	if err := m.ChatPrompt("chat-1", "hello", "", &fakeSink{}); err != nil {
+		t.Fatal(err)
+	}
+	client.mu.Lock()
+	if client.promptModels[0] != "xai/grok-4.5" {
+		t.Errorf("prompt model = %q", client.promptModels[0])
+	}
+	client.mu.Unlock()
+
+	// The pin survives a restart and coexists with the delegated default.
+	if err := m.SetDefaultModel("xai/grok-4.3"); err != nil {
+		t.Fatal(err)
+	}
+	m2 := NewOpencodeManager(OpencodeOptions{Enabled: true}, nil, tasksPath, testLogger())
+	if m2.ChatModel() != "xai/grok-4.5" || m2.DefaultModel() != "xai/grok-4.3" {
+		t.Errorf("after restart: chat=%q default=%q", m2.ChatModel(), m2.DefaultModel())
+	}
+}
