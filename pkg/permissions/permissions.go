@@ -135,6 +135,12 @@ trusted:
   - "axios-network__dns_lookup"
   - "axios-network__ping_host"
   - "axios-network__tailscale_status"
+  - "axios-git__git_status"
+  - "axios-git__git_log"
+  - "axios-git__git_diff"
+  - "axios-git__git_branches"
+  - "axios-git__git_show"
+  - "axios-git__git_remotes"
 approval_required:
   - "axios-fs__write_file"
   - "axios-fs__delete_file"
@@ -152,6 +158,11 @@ approval_required:
   - "axios-ollama__delete_model"
   - "axios-network__tailscale_up"
   - "axios-network__tailscale_down"
+  - "axios-git__git_pull"
+  - "axios-git__git_clone"
+  - "axios-git__git_checkout"
+  - "axios-git__git_commit"
+  - "axios-git__git_push"
   - "opencode__*"
 `
 

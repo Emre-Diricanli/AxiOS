@@ -10,7 +10,7 @@ model.
 ## Project structure
 
 - `cmd/axiosd/` — daemon entry point (config load, provider resolution, wiring)
-- `cmd/axios-fs/`, `cmd/axios-system/`, `cmd/axios-docker/`, `cmd/axios-ollama/`, `cmd/axios-network/` — active MCP servers; `cmd/axios-{gpu,media,git}/` are stubs
+- `cmd/axios-fs/`, `cmd/axios-system/`, `cmd/axios-docker/`, `cmd/axios-ollama/`, `cmd/axios-network/`, `cmd/axios-git/` — active MCP servers; `cmd/axios-{gpu,media}/` are stubs
 - `internal/axiosd/` — daemon internals: HTTP/WS server, agentic chat loop,
   provider runtime, sessions, permission middleware + WebSocket approval flow,
   opencode manager/API/task store, cloud/local router, MCP lifecycle
@@ -18,6 +18,7 @@ model.
 - `internal/dockerctl/` — shared Docker CLI wrapper (daemon REST handlers + axios-docker MCP server)
 - `internal/ollamactl/` — shared Ollama HTTP API client (daemon model-management handlers + axios-ollama MCP server)
 - `internal/netctl/` — network inspection (interfaces, DNS, ping) + tailscale CLI wrapper (axios-network MCP server)
+- `internal/gitctl/` — git CLI wrapper with strict path/ref/clone-URL validation (axios-git MCP server)
 - `pkg/providers/` — provider profiles + registry, transports, error classifier,
   model-name normalization; canonical message format is the OpenAI Chat
   Completions shape

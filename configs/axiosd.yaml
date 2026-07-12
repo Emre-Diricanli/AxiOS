@@ -64,10 +64,10 @@ mcp:
     - axios-docker
     - axios-ollama
     - axios-network
+    - axios-git
   # Future servers:
   #   - axios-gpu
   #   - axios-media
-  #   - axios-git
 
 gateway:
   # CasaOS-Gateway integration (for running inside CasaOS)
