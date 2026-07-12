@@ -40,3 +40,9 @@ Thumbs.db
 # Test
 coverage.out
 coverage.html
+
+# design-sync build state
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
