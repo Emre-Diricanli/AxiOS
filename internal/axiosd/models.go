@@ -1,25 +1,16 @@
 package axiosd
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"time"
+
+	"github.com/axios-os/axios/internal/ollamactl"
 )
 
-// InstalledModel represents a locally installed Ollama model.
-type InstalledModel struct {
-	Name         string `json:"name"`
-	Size         int64  `json:"size"`
-	SizeHuman    string `json:"size_human"`
-	Modified     string `json:"modified"`
-	Family       string `json:"family"`
-	Parameters   string `json:"parameters"`
-	Quantization string `json:"quantization"`
-}
+// InstalledModel represents a locally installed Ollama model. It is an alias
+// of the shared ollamactl.Model so the REST JSON shape stays unchanged.
+type InstalledModel = ollamactl.Model
 
 // MarketplaceModel represents a model available for download from the Ollama registry.
 type MarketplaceModel struct {
@@ -31,140 +22,13 @@ type MarketplaceModel struct {
 	Recommended bool     `json:"recommended"`
 }
 
-// PullProgress represents progress of a model pull operation.
-type PullProgress struct {
-	Status    string  `json:"status"`
-	Digest    string  `json:"digest,omitempty"`
-	Total     int64   `json:"total,omitempty"`
-	Completed int64   `json:"completed,omitempty"`
-	Percent   float64 `json:"percent"`
-}
-
-// formatSize converts bytes to a human-readable string.
-func formatSize(bytes int64) string {
-	const (
-		KB = 1024
-		MB = KB * 1024
-		GB = MB * 1024
-		TB = GB * 1024
-	)
-	switch {
-	case bytes >= TB:
-		return fmt.Sprintf("%.1f TB", float64(bytes)/float64(TB))
-	case bytes >= GB:
-		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(GB))
-	case bytes >= MB:
-		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(MB))
-	case bytes >= KB:
-		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(KB))
-	default:
-		return fmt.Sprintf("%d B", bytes)
-	}
-}
-
-// ollamaTagsResponse is the response from Ollama's GET /api/tags endpoint.
-type ollamaTagsResponse struct {
-	Models []ollamaModelEntry `json:"models"`
-}
-
-type ollamaModelEntry struct {
-	Name       string    `json:"name"`
-	ModifiedAt time.Time `json:"modified_at"`
-	Size       int64     `json:"size"`
-	Digest     string    `json:"digest"`
-	Details    struct {
-		Format            string   `json:"format"`
-		Family            string   `json:"family"`
-		Families          []string `json:"families"`
-		ParameterSize     string   `json:"parameter_size"`
-		QuantizationLevel string   `json:"quantization_level"`
-	} `json:"details"`
-}
-
-// ollamaShowResponse is the response from Ollama's POST /api/show endpoint.
-type ollamaShowResponse struct {
-	License    string `json:"license"`
-	Modelfile  string `json:"modelfile"`
-	Parameters string `json:"parameters"`
-	Template   string `json:"template"`
-	Details    struct {
-		Format            string   `json:"format"`
-		Family            string   `json:"family"`
-		Families          []string `json:"families"`
-		ParameterSize     string   `json:"parameter_size"`
-		QuantizationLevel string   `json:"quantization_level"`
-	} `json:"details"`
-}
-
-// ollamaPullRequest is the request body for Ollama's POST /api/pull endpoint.
-type ollamaPullRequest struct {
-	Name   string `json:"name"`
-	Stream bool   `json:"stream"`
-}
-
-// ollamaPullProgress is a single progress line from Ollama's pull stream.
-type ollamaPullProgress struct {
-	Status    string `json:"status"`
-	Digest    string `json:"digest"`
-	Total     int64  `json:"total"`
-	Completed int64  `json:"completed"`
-}
-
-// ollamaDeleteRequest is the request body for Ollama's DELETE /api/delete endpoint.
-type ollamaDeleteRequest struct {
-	Name string `json:"name"`
-}
+// PullProgress represents progress of a model pull operation. It is an alias
+// of the shared ollamactl.PullProgress so the SSE JSON shape stays unchanged.
+type PullProgress = ollamactl.PullProgress
 
 // getInstalledModels fetches the list of locally installed models from Ollama.
 func getInstalledModels(ollamaURL string) ([]InstalledModel, error) {
-	resp, err := http.Get(ollamaURL + "/api/tags")
-	if err != nil {
-		return nil, fmt.Errorf("failed to reach Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Ollama returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	var tagsResp ollamaTagsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tagsResp); err != nil {
-		return nil, fmt.Errorf("failed to parse Ollama response: %w", err)
-	}
-
-	models := make([]InstalledModel, 0, len(tagsResp.Models))
-	for _, m := range tagsResp.Models {
-		model := InstalledModel{
-			Name:         m.Name,
-			Size:         m.Size,
-			SizeHuman:    formatSize(m.Size),
-			Modified:     m.ModifiedAt.Format(time.RFC3339),
-			Family:       m.Details.Family,
-			Parameters:   m.Details.ParameterSize,
-			Quantization: m.Details.QuantizationLevel,
-		}
-
-		// If details are missing from the tags response, try /api/show
-		if model.Family == "" || model.Parameters == "" || model.Quantization == "" {
-			info, err := getModelInfo(ollamaURL, m.Name)
-			if err == nil {
-				if model.Family == "" {
-					model.Family = info.Details.Family
-				}
-				if model.Parameters == "" {
-					model.Parameters = info.Details.ParameterSize
-				}
-				if model.Quantization == "" {
-					model.Quantization = info.Details.QuantizationLevel
-				}
-			}
-		}
-
-		models = append(models, model)
-	}
-
-	return models, nil
+	return ollamactl.New(ollamaURL, nil).ListModels()
 }
 
 // getMarketplaceModels returns a curated list of popular models available from the Ollama registry.
@@ -328,103 +192,19 @@ func getMarketplaceModels() []MarketplaceModel {
 func pullModel(ollamaURL, modelName string, progressChan chan<- PullProgress) error {
 	defer close(progressChan)
 
-	reqBody, err := json.Marshal(ollamaPullRequest{
-		Name:   modelName,
-		Stream: true,
+	return ollamactl.New(ollamaURL, nil).PullModel(modelName, func(p ollamactl.PullProgress) {
+		progressChan <- p
 	})
-	if err != nil {
-		return fmt.Errorf("failed to marshal pull request: %w", err)
-	}
-
-	resp, err := http.Post(ollamaURL+"/api/pull", "application/json", bytes.NewReader(reqBody))
-	if err != nil {
-		return fmt.Errorf("failed to reach Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Ollama returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	scanner := bufio.NewScanner(resp.Body)
-	// Increase buffer size for potentially large lines
-	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
-
-	for scanner.Scan() {
-		var progress ollamaPullProgress
-		if err := json.Unmarshal(scanner.Bytes(), &progress); err != nil {
-			continue
-		}
-
-		var percent float64
-		if progress.Total > 0 {
-			percent = float64(progress.Completed) / float64(progress.Total) * 100
-		}
-
-		progressChan <- PullProgress{
-			Status:    progress.Status,
-			Digest:    progress.Digest,
-			Total:     progress.Total,
-			Completed: progress.Completed,
-			Percent:   percent,
-		}
-	}
-
-	return scanner.Err()
 }
 
 // deleteModel deletes a locally installed model from Ollama.
 func deleteModel(ollamaURL, modelName string) error {
-	reqBody, err := json.Marshal(ollamaDeleteRequest{Name: modelName})
-	if err != nil {
-		return fmt.Errorf("failed to marshal delete request: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, ollamaURL+"/api/delete", bytes.NewReader(reqBody))
-	if err != nil {
-		return fmt.Errorf("failed to create delete request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to reach Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Ollama returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return ollamactl.New(ollamaURL, nil).DeleteModel(modelName)
 }
 
 // getModelInfo fetches detailed information about a specific model from Ollama.
-func getModelInfo(ollamaURL, modelName string) (*ollamaShowResponse, error) {
-	reqBody, err := json.Marshal(map[string]string{"name": modelName})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal show request: %w", err)
-	}
-
-	resp, err := http.Post(ollamaURL+"/api/show", "application/json", bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to reach Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Ollama returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	var showResp ollamaShowResponse
-	if err := json.NewDecoder(resp.Body).Decode(&showResp); err != nil {
-		return nil, fmt.Errorf("failed to parse Ollama response: %w", err)
-	}
-
-	return &showResp, nil
+func getModelInfo(ollamaURL, modelName string) (*ollamactl.ShowResponse, error) {
+	return ollamactl.New(ollamaURL, nil).ModelInfo(modelName)
 }
 
 // --- HTTP Handlers ---

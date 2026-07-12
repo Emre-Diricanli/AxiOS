@@ -128,6 +128,9 @@ trusted:
   - "axios-docker__container_logs"
   - "axios-docker__list_images"
   - "axios-docker__docker_stats"
+  - "axios-ollama__list_models"
+  - "axios-ollama__model_info"
+  - "axios-ollama__ollama_status"
 approval_required:
   - "axios-fs__write_file"
   - "axios-fs__delete_file"
@@ -141,6 +144,8 @@ approval_required:
   - "axios-docker__run_container"
   - "axios-docker__compose_up"
   - "axios-docker__compose_down"
+  - "axios-ollama__pull_model"
+  - "axios-ollama__delete_model"
   - "opencode__*"
 `
 

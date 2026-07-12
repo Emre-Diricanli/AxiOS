@@ -10,6 +10,7 @@ build:
 	go build -o bin/axios-fs ./cmd/axios-fs
 	go build -o bin/axios-system ./cmd/axios-system
 	go build -o bin/axios-docker ./cmd/axios-docker
+	go build -o bin/axios-ollama ./cmd/axios-ollama
 
 # Build individual binaries
 axiosd:
@@ -26,6 +27,7 @@ dev-mcp:
 	@go run ./cmd/axios-fs --socket $(SOCKET_DIR)/axios-fs.sock &
 	@go run ./cmd/axios-system --socket $(SOCKET_DIR)/axios-system.sock &
 	@go run ./cmd/axios-docker --socket $(SOCKET_DIR)/axios-docker.sock &
+	@go run ./cmd/axios-ollama --socket $(SOCKET_DIR)/axios-ollama.sock &
 	@echo "MCP servers started. Sockets in $(SOCKET_DIR)/"
 
 dev-axiosd:
