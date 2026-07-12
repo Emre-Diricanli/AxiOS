@@ -183,6 +183,24 @@ func (c *Client) Providers() ([]ProviderModels, error) {
 	return out, nil
 }
 
+// ReplyQuestion answers a question.asked event via
+// POST /question/{requestID}/reply. answers holds, per question in order,
+// the selected option labels (or a free-text answer when the question
+// allows custom input).
+func (c *Client) ReplyQuestion(requestID string, answers [][]string) error {
+	if answers == nil {
+		answers = [][]string{}
+	}
+	return c.do(http.MethodPost, "/question/"+url.PathEscape(requestID)+"/reply",
+		nil, questionReply{Answers: answers}, nil)
+}
+
+// RejectQuestion declines a question.asked event via
+// POST /question/{requestID}/reject.
+func (c *Client) RejectQuestion(requestID string) error {
+	return c.do(http.MethodPost, "/question/"+url.PathEscape(requestID)+"/reject", nil, nil, nil)
+}
+
 // Request bodies (legacy v1.17.0 shapes).
 
 type createSessionRequest struct {
@@ -201,6 +219,10 @@ type textPart struct {
 
 type permissionReply struct {
 	Response string `json:"response"`
+}
+
+type questionReply struct {
+	Answers [][]string `json:"answers"`
 }
 
 // do performs one authenticated JSON request. body is marshaled when non-nil;

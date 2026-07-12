@@ -21,6 +21,12 @@ export interface ChatMessage {
   tool?: string;
   params?: unknown;
   approve?: boolean;
+
+  // Chat backend selection on user messages: "code" routes the turn to an
+  // interactive opencode session; directory optionally sets the project
+  // directory when the code session is first created.
+  mode?: "code";
+  directory?: string;
 }
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired";

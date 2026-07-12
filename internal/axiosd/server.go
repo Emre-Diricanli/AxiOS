@@ -128,6 +128,12 @@ type ChatMessage struct {
 	ToolName  string `json:"toolName,omitempty"`
 	ToolID    string `json:"toolId,omitempty"`
 
+	// Mode selects the chat backend for user messages: "" = the provider
+	// chat loop; "code" = an interactive opencode session. Directory
+	// optionally sets the project directory when a code session is created.
+	Mode      string `json:"mode,omitempty"`
+	Directory string `json:"directory,omitempty"`
+
 	// Approval flow fields. approval_request (daemon → UI) carries ID, Tool,
 	// and Params; approval_response (UI → daemon) carries ID and Approve.
 	ID      string          `json:"id,omitempty"`
@@ -211,6 +217,14 @@ func (s *Server) SetOpencodeManager(m *OpencodeManager) {
 		},
 		s.requestGlobalApproval,
 	)
+	// Persist finished code-chat turns into the AxiOS chat history so the
+	// transcript survives reloads.
+	m.bindTurnComplete(func(chatSessionID, text string) {
+		s.sessions.Get(chatSessionID).AddMessage(providers.Message{Role: "assistant", Content: text})
+		if err := s.sessions.Save(); err != nil {
+			s.logger.Error("failed to save sessions after code turn", "error", err)
+		}
+	})
 }
 
 // registerSink tracks an active websocket chat connection so out-of-band
@@ -587,6 +601,25 @@ func (s *Server) handleUserChatMessage(ctx context.Context, sink wsSink, msg Cha
 
 	session := s.sessions.Get(sessionID)
 	session.AddMessage(providers.Message{Role: "user", Content: msg.Content})
+
+	// Code mode: the turn runs on an interactive opencode session; progress
+	// streams back via the manager's event bridge, which also emits the
+	// closing "done" status when the session goes idle.
+	if msg.Mode == "code" {
+		if s.opencodeMgr == nil {
+			s.sendMessage(sink, ChatMessage{Type: "error", Content: "code mode requires the opencode integration"})
+			s.sendMessage(sink, ChatMessage{Type: "status", Content: "done"})
+			return
+		}
+		if err := s.opencodeMgr.ChatPrompt(sessionID, msg.Content, msg.Directory, sink); err != nil {
+			s.sendMessage(sink, ChatMessage{Type: "error", Content: err.Error()})
+			s.sendMessage(sink, ChatMessage{Type: "status", Content: "done"})
+		}
+		if err := s.sessions.Save(); err != nil {
+			s.logger.Error("failed to auto-save sessions", "error", err)
+		}
+		return
+	}
 
 	// Route to the appropriate backend and resolve its provider client.
 	backend := s.router.Route()

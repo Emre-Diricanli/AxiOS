@@ -61,6 +61,7 @@ function relativeTime(dateStr: string): string {
 export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [codeMode, setCodeMode] = useState(false);
   const [activeModel, setActiveModel] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
@@ -239,6 +240,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const handleSend = useCallback(
     (content: string) => {
       const currentSessionId = sessionId || "default";
+      const mode = codeMode ? ("code" as const) : undefined;
       if (!sessionId) {
         // Auto-create a session if none active
         fetch("/api/chat/sessions", { method: "POST" })
@@ -249,7 +251,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
               setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content }]);
               setStreaming(true);
               streamBufferRef.current = "";
-              send({ type: "user", content, sessionId: data.id });
+              send({ type: "user", content, sessionId: data.id, mode });
             }
           });
         return;
@@ -257,9 +259,9 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content }]);
       setStreaming(true);
       streamBufferRef.current = "";
-      send({ type: "user", content, sessionId: currentSessionId });
+      send({ type: "user", content, sessionId: currentSessionId, mode });
     },
-    [send, sessionId]
+    [send, sessionId, codeMode]
   );
 
   // Expose createSession to parent via ref (for Command Palette "New Chat")
@@ -436,7 +438,13 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
 
       {/* Input */}
       <div className="animate-fade-up">
-        <InputBar onSend={handleSend} disabled={!connected || streaming} modelName={activeModel ?? undefined} />
+        <InputBar
+          onSend={handleSend}
+          disabled={!connected || streaming}
+          modelName={codeMode ? "opencode" : activeModel ?? undefined}
+          codeMode={codeMode}
+          onToggleCodeMode={() => setCodeMode((v) => !v)}
+        />
       </div>
     </div>
   );

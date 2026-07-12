@@ -4,9 +4,11 @@ interface InputBarProps {
   onSend: (message: string) => void;
   disabled?: boolean;
   modelName?: string;
+  codeMode?: boolean;
+  onToggleCodeMode?: () => void;
 }
 
-export function InputBar({ onSend, disabled, modelName }: InputBarProps) {
+export function InputBar({ onSend, disabled, modelName, codeMode, onToggleCodeMode }: InputBarProps) {
   const [input, setInput] = useState("");
 
   const handleSubmit = (e: FormEvent) => {
@@ -26,11 +28,28 @@ export function InputBar({ onSend, disabled, modelName }: InputBarProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex gap-2 p-3 border-t border-border shrink-0">
+      {onToggleCodeMode && (
+        <button
+          type="button"
+          onClick={onToggleCodeMode}
+          title={codeMode ? "Code mode on — messages go to the opencode coding agent" : "Switch to code mode (opencode coding agent)"}
+          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 border ${
+            codeMode
+              ? "bg-primary/20 text-primary border-primary/40 glow-sm"
+              : "glass-subtle text-muted-foreground border-transparent hover:text-foreground"
+          }`}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+        </button>
+      )}
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={`Message ${modelName ?? "AxiOS"}...`}
+        placeholder={codeMode ? "Code with opencode…" : `Message ${modelName ?? "AxiOS"}...`}
         disabled={disabled}
         rows={1}
         className="flex-1 resize-none rounded-xl glass-subtle px-3.5 py-2.5 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/30 disabled:opacity-30 transition-all"

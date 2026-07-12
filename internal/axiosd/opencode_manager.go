@@ -52,6 +52,8 @@ type opencodeAPI interface {
 	PromptAsync(sessionID string, model *opencode.ModelRef, text string) error
 	Messages(sessionID string) ([]opencode.Message, error)
 	ReplyPermission(sessionID, permID, response string) error
+	ReplyQuestion(requestID string, answers [][]string) error
+	RejectQuestion(requestID string) error
 	Abort(sessionID string) error
 	Diff(sessionID string) ([]opencode.FileDiff, error)
 	Providers() ([]opencode.ProviderModels, error)
@@ -105,6 +107,8 @@ type OpencodeManager struct {
 	// opts.Model; "" means no override.
 	modelOverride string
 	settingsPath  string // "" = in-memory only (tests)
+	// chat is the interactive code-chat bridge state (lazy; see codeChat()).
+	chat *codeChatState
 }
 
 // opencodeSettings is the persisted shape of opencode_settings.json.
@@ -490,16 +494,30 @@ func (m *OpencodeManager) handleEvent(ev opencode.Event) {
 			return
 		}
 		go m.handlePermissionAsked(p)
+	case opencode.EventMessagePartDelta:
+		m.handleCodeDelta(ev.Properties)
+	case opencode.EventMessagePartUpdated:
+		m.handleCodePartUpdated(ev.Properties)
+	case opencode.EventQuestionAsked:
+		m.handleCodeQuestion(ev.Properties)
 	case opencode.EventSessionIdle:
 		if sid := eventSessionID(ev.Properties); sid != "" {
-			m.finalizeTask(sid, "")
+			if m.isCodeSession(sid) {
+				m.finishCodeTurn(sid, "")
+			} else {
+				m.finalizeTask(sid, "")
+			}
 		}
 	case opencode.EventSessionError:
 		sid := eventSessionID(ev.Properties)
 		if sid == "" {
 			return
 		}
-		m.finalizeTask(sid, string(ev.Properties))
+		if m.isCodeSession(sid) {
+			m.finishCodeTurn(sid, string(ev.Properties))
+		} else {
+			m.finalizeTask(sid, string(ev.Properties))
+		}
 	}
 }
 

@@ -16,16 +16,18 @@ import (
 
 // fakeOpencodeClient implements opencodeAPI for tests.
 type fakeOpencodeClient struct {
-	mu           sync.Mutex
-	permReplies  []string // "sessionID/permID/response"
-	prompts      []string
-	promptModels []string // "provider/model" per prompt, "" when nil
-	aborted      []string
-	sessionSeq   int
-	messages     map[string][]opencode.Message
-	diffs        map[string][]opencode.FileDiff
-	createErr    error
-	promptErr    error
+	mu              sync.Mutex
+	permReplies     []string // "sessionID/permID/response"
+	prompts         []string
+	promptModels    []string // "provider/model" per prompt, "" when nil
+	aborted         []string
+	questionReplies []string // "requestID=<answers json>"
+	questionRejects []string
+	sessionSeq      int
+	messages        map[string][]opencode.Message
+	diffs           map[string][]opencode.FileDiff
+	createErr       error
+	promptErr       error
 }
 
 func (f *fakeOpencodeClient) Health() error { return nil }
@@ -79,6 +81,21 @@ func (f *fakeOpencodeClient) Diff(sessionID string) ([]opencode.FileDiff, error)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.diffs[sessionID], nil
+}
+
+func (f *fakeOpencodeClient) ReplyQuestion(requestID string, answers [][]string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	data, _ := json.Marshal(answers)
+	f.questionReplies = append(f.questionReplies, requestID+"="+string(data))
+	return nil
+}
+
+func (f *fakeOpencodeClient) RejectQuestion(requestID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.questionRejects = append(f.questionRejects, requestID)
+	return nil
 }
 
 func (f *fakeOpencodeClient) Providers() ([]opencode.ProviderModels, error) {

@@ -20,6 +20,9 @@ const (
 	// EventMessagePartDelta streams incremental message-part updates
 	// (e.g. assistant text as it is generated).
 	EventMessagePartDelta = "message.part.delta"
+	// EventMessagePartUpdated fires when a message part changes state —
+	// notably tool parts transitioning pending → running → completed/error.
+	EventMessagePartUpdated = "message.part.updated"
 )
 
 // Session is an opencode session as returned by POST /session.
@@ -129,6 +132,67 @@ type FileDiff struct {
 type ProviderModels struct {
 	ID     string   `json:"id"`
 	Models []string `json:"models"`
+}
+
+// PartDelta is the decoded Properties payload of a message.part.delta event
+// (verified against the v1.17.0 /doc: EventMessagePartDelta).
+type PartDelta struct {
+	SessionID string `json:"sessionID"`
+	MessageID string `json:"messageID"`
+	PartID    string `json:"partID"`
+	Field     string `json:"field"` // "text" for assistant text deltas
+	Delta     string `json:"delta"`
+}
+
+// PartUpdated is the decoded Properties payload of a message.part.updated
+// event.
+type PartUpdated struct {
+	SessionID string `json:"sessionID"`
+	Part      Part   `json:"part"`
+}
+
+// ToolState is a tool part's execution state (verified shape: ToolStatePending/
+// Running/Completed/Error in the v1.17.0 /doc).
+type ToolState struct {
+	Status string         `json:"status"` // pending | running | completed | error
+	Input  map[string]any `json:"input,omitempty"`
+	Output string         `json:"output,omitempty"`
+	Error  string         `json:"error,omitempty"`
+	Title  string         `json:"title,omitempty"`
+}
+
+// ToolState decodes the raw state of a tool part; nil for non-tool parts.
+func (p *Part) ToolState() *ToolState {
+	if p.Type != "tool" || len(p.State) == 0 {
+		return nil
+	}
+	var st ToolState
+	if err := json.Unmarshal(p.State, &st); err != nil {
+		return nil
+	}
+	return &st
+}
+
+// QuestionOption is one selectable answer of a QuestionInfo.
+type QuestionOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+// QuestionInfo is one question the agent asks the user (question.asked).
+type QuestionInfo struct {
+	Question string           `json:"question"`
+	Header   string           `json:"header,omitempty"`
+	Options  []QuestionOption `json:"options,omitempty"`
+	Multiple bool             `json:"multiple,omitempty"`
+	Custom   bool             `json:"custom,omitempty"`
+}
+
+// QuestionAsked is the decoded Properties payload of a question.asked event.
+type QuestionAsked struct {
+	ID        string         `json:"id"`
+	SessionID string         `json:"sessionID"`
+	Questions []QuestionInfo `json:"questions"`
 }
 
 // PermissionAsked is the decoded Properties payload of a
