@@ -205,3 +205,56 @@ server:
 		t.Errorf("Server.Listen = %q, explicit listen must win", cfg.Server.Listen)
 	}
 }
+
+func TestLoadDaemonAuthDefaults(t *testing.T) {
+	cfg, err := LoadDaemon(writeConfig(t, "routing:\n  mode: auto\n"))
+	if err != nil {
+		t.Fatalf("LoadDaemon: %v", err)
+	}
+	if !cfg.Server.AuthEnabled() {
+		t.Error("AuthEnabled() = false with server.auth omitted, want enabled by default")
+	}
+	if cfg.Server.Auth.SessionTTLHours != 168 {
+		t.Errorf("Auth.SessionTTLHours = %d, want 168", cfg.Server.Auth.SessionTTLHours)
+	}
+	if len(cfg.Server.Auth.AllowedOrigins) != 0 {
+		t.Errorf("Auth.AllowedOrigins = %v, want empty", cfg.Server.Auth.AllowedOrigins)
+	}
+}
+
+func TestLoadDaemonAuthOverrides(t *testing.T) {
+	cfg, err := LoadDaemon(writeConfig(t, `
+server:
+  auth:
+    enabled: false
+    session_ttl_hours: 24
+    allowed_origins:
+      - https://axios.example.ts.net
+`))
+	if err != nil {
+		t.Fatalf("LoadDaemon: %v", err)
+	}
+	if cfg.Server.AuthEnabled() {
+		t.Error("AuthEnabled() = true, explicit enabled: false must win")
+	}
+	if cfg.Server.Auth.SessionTTLHours != 24 {
+		t.Errorf("Auth.SessionTTLHours = %d, want 24", cfg.Server.Auth.SessionTTLHours)
+	}
+	if len(cfg.Server.Auth.AllowedOrigins) != 1 || cfg.Server.Auth.AllowedOrigins[0] != "https://axios.example.ts.net" {
+		t.Errorf("Auth.AllowedOrigins = %v", cfg.Server.Auth.AllowedOrigins)
+	}
+}
+
+func TestLoadDaemonAuthExplicitEnabled(t *testing.T) {
+	cfg, err := LoadDaemon(writeConfig(t, `
+server:
+  auth:
+    enabled: true
+`))
+	if err != nil {
+		t.Fatalf("LoadDaemon: %v", err)
+	}
+	if !cfg.Server.AuthEnabled() {
+		t.Error("AuthEnabled() = false with enabled: true")
+	}
+}

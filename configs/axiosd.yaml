@@ -3,6 +3,25 @@ server:
   # requires explicit opt-in (e.g. "0.0.0.0:3000").
   listen: "127.0.0.1:3000"
 
+  # Admin authentication (Jupyter-style). On first start axiosd generates an
+  # "axsk_..." admin token, prints it ONCE to the daemon log, and stores only
+  # its hash in $AXIOS_DATA_DIR/auth.json. Sign in through the web UI (POST
+  # /api/auth/login → session cookie) or send the token directly as
+  # `Authorization: Bearer axsk_...` (works for /v1 and curl). Lost token?
+  # `axiosd --reset-auth` prints a fresh one and invalidates all sessions.
+  # For TLS or off-machine access, keep listen on 127.0.0.1 and front axiosd
+  # with `tailscale serve` or a reverse proxy. Contract: docs/auth-api.md.
+  auth:
+    # Auth is ON by default; omitting this section keeps it enabled.
+    enabled: true
+    # Login session lifetime in hours (default 168 = 7 days).
+    session_ttl_hours: 168
+    # Extra browser origins allowed for state-changing requests and
+    # websockets. Same-host and loopback origins are always allowed, so this
+    # is only needed behind a reverse proxy that changes the Host header, e.g.
+    #   - "https://axios.tail1234.ts.net"
+    allowed_origins: []
+
 model:
   # auto: resolve at boot — explicit provider here, then the first provider
   # whose API-key env var is set, then the saved active provider, then a

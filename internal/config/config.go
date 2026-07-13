@@ -40,6 +40,30 @@ type ServerConfig struct {
 	// Listen is empty) they are joined into Listen with a warning.
 	Host string `yaml:"host"`
 	Port int    `yaml:"port"`
+
+	// Auth controls admin authentication on the /api, /ws and /v1 surface.
+	Auth AuthConfig `yaml:"auth"`
+}
+
+// AuthConfig configures the admin authentication layer. On first start
+// axiosd generates a Jupyter-style admin token ("axsk_..."), prints it once
+// to the daemon log, and stores only its hash in $AXIOS_DATA_DIR/auth.json;
+// `axiosd --reset-auth` regenerates it and invalidates all sessions. TLS and
+// off-machine exposure should go through `tailscale serve` or a reverse
+// proxy — server.listen stays on 127.0.0.1 by default.
+type AuthConfig struct {
+	// Enabled toggles the auth middleware. Omitting the key keeps it ON —
+	// authentication is enabled by default (see ServerConfig.AuthEnabled).
+	Enabled *bool `yaml:"enabled"`
+
+	// SessionTTLHours is the login session cookie lifetime (default 168 = 7
+	// days). Sessions are invalidated early by --reset-auth.
+	SessionTTLHours int `yaml:"session_ttl_hours"`
+
+	// AllowedOrigins lists extra browser origins permitted to make
+	// state-changing requests and websocket connections (for reverse-proxy
+	// setups). Same-host and loopback origins are always allowed.
+	AllowedOrigins []string `yaml:"allowed_origins"`
 }
 
 // ModelConfig selects the active provider and model.
@@ -106,6 +130,13 @@ type PermissionsConfig struct {
 	ApprovalTimeoutSeconds int `yaml:"approval_timeout_seconds"`
 }
 
+// AuthEnabled reports whether admin authentication is on. It defaults to
+// true when the config omits server.auth.enabled — auth is an explicit
+// opt-out, never a forgotten opt-in.
+func (s ServerConfig) AuthEnabled() bool {
+	return s.Auth.Enabled == nil || *s.Auth.Enabled
+}
+
 // LegacyAnthropicCredential returns the credential from the deprecated
 // anthropic: section, preferring the OAuth token, or "" when unset.
 func (d *Daemon) LegacyAnthropicCredential() string {
@@ -151,6 +182,12 @@ func applyDefaults(cfg *Daemon) {
 	}
 	if cfg.Server.Listen == "" {
 		cfg.Server.Listen = "127.0.0.1:3000"
+	}
+
+	// Auth defaults: enabled stays nil-means-true (see AuthEnabled); login
+	// sessions last a week unless configured otherwise.
+	if cfg.Server.Auth.SessionTTLHours <= 0 {
+		cfg.Server.Auth.SessionTTLHours = 168
 	}
 
 	// Legacy anthropic: section → model.provider/model.id.

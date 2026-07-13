@@ -65,6 +65,11 @@ type Server struct {
 	// xAI SuperGrok subscription OAuth (device-code flow), created lazily.
 	xaiOAuthOnce sync.Once
 	xaiOAuthFlow *XAIOAuth
+
+	// Admin authentication: token/session verification, origin policy, and
+	// the fail-closed middleware around the whole mux (see auth.go). Nil only
+	// when the main.go wiring is bypassed (unit tests).
+	auth *AuthManager
 }
 
 // InferenceMetrics describes the latest completed provider request.
@@ -247,6 +252,19 @@ func (s *Server) SetApprovalTimeout(d time.Duration) {
 	}
 }
 
+// SetAuth wires the admin authentication manager. It also replaces the
+// permissive default websocket CheckOrigin with the shared origin policy —
+// both upgrade sites (chat and terminal) go through s.upgrader, so this one
+// assignment covers them. The auth middleware itself is applied around the
+// whole mux in ListenAndServe.
+func (s *Server) SetAuth(m *AuthManager) {
+	if m == nil {
+		return
+	}
+	s.auth = m
+	s.upgrader.CheckOrigin = m.originAllowed
+}
+
 // SetOpencodeManager attaches the background coding agent and binds its
 // permission bridge to this server's policy and approval flow. Call after
 // SetPermissionChecker and before BuildTools.
@@ -322,6 +340,13 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/status", s.handleStatus)
+
+	// Admin authentication. login and status are public (the SPA gates on
+	// status); every other /api, /ws and /v1 route requires auth via the
+	// middleware in auth.go. Contract: docs/auth-api.md.
+	mux.HandleFunc("/api/auth/login", s.handleAuthLogin)
+	mux.HandleFunc("/api/auth/logout", s.handleAuthLogout)
+	mux.HandleFunc("/api/auth/status", s.handleAuthStatus)
 
 	// System stats endpoint (gathered directly, no MCP)
 	mux.HandleFunc("/api/system/stats", s.handleSystemStats)
@@ -1572,6 +1597,14 @@ func (s *Server) jsonError(w http.ResponseWriter, msg string, status int) {
 func (s *Server) ListenAndServe(addr string) error {
 	mux := http.NewServeMux()
 	s.SetupRoutes(mux)
+
+	// The auth middleware wraps the entire mux in this single place, so every
+	// route — including ones added later — is protected by default (fail
+	// closed). See auth.go and docs/auth-api.md.
+	if s.auth != nil {
+		s.logger.Info("starting server", "addr", addr)
+		return http.ListenAndServe(addr, s.auth.Middleware(mux))
+	}
 
 	s.logger.Info("starting server", "addr", addr)
 	return http.ListenAndServe(addr, mux)

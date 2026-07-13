@@ -64,9 +64,16 @@ model.
   unknown tools default to `approval_required`; always fail closed
 - Secrets: never log key material or plaintext; encrypted values carry the
   `axsec1:` prefix; legacy base64 values are upgraded transparently on save
+- Auth: Jupyter-style admin token (`axsk_...`), hash-only at
+  `$AXIOS_DATA_DIR/auth.json` (0600), printed once at generation; reset with
+  `axiosd --reset-auth`. One middleware wraps the whole mux, so every `/api`,
+  `/ws` and `/v1` route is protected **by default** (session cookie or
+  `Authorization: Bearer`); new routes need no opt-in. Origin policy guards
+  WS upgrades + state-changing HTTP. Frontend/API contract: `docs/auth-api.md`
 - MCP transport: Unix sockets, default `/tmp/axios-mcp` (config `mcp.socket_dir`)
 - Runtime state: `$AXIOS_DATA_DIR` (default `~/.axios`) — `master.key`,
-  `providers.json`, `hosts.json`, `sessions.json`, `opencode_tasks.json`
+  `auth.json`, `providers.json`, `hosts.json`, `sessions.json`,
+  `opencode_tasks.json`
 - Tests: table-driven, `_test.go` beside source, `httptest` for HTTP;
   integration tests in `test/`
 - Design spec: `docs/phase1-design.md` is the authoritative Phase 1 reference

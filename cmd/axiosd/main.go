@@ -29,6 +29,7 @@ const (
 
 func main() {
 	configPath := flag.String("config", defaultConfigPath, "path to axiosd config")
+	resetAuth := flag.Bool("reset-auth", false, "regenerate the admin token and session key (invalidates all sessions), print the new token, and exit")
 	flag.Parse()
 
 	logger := logging.New("axiosd")
@@ -64,6 +65,30 @@ func main() {
 		dataDir = filepath.Join(homeDir, ".axios")
 	}
 	os.MkdirAll(dataDir, 0755)
+
+	// Admin authentication state: a Jupyter-style token (stored hashed) plus
+	// an HMAC session-signing key in auth.json (0600). --reset-auth rotates
+	// both and bumps the epoch, invalidating every outstanding session.
+	authStatePath := filepath.Join(dataDir, "auth.json")
+	if *resetAuth {
+		token, err := axiosd.ResetAuthState(authStatePath)
+		if err != nil {
+			logger.Error("failed to reset auth state", "error", err)
+			os.Exit(1)
+		}
+		axiosd.PrintAuthTokenBanner(os.Stderr, token, true)
+		os.Exit(0)
+	}
+	authStore, newAuthToken, err := axiosd.LoadOrCreateAuthState(authStatePath)
+	if err != nil {
+		logger.Error("failed to initialize auth state — refusing to start unauthenticated", "error", err, "path", authStatePath)
+		os.Exit(1)
+	}
+	if newAuthToken != "" {
+		// Printed exactly once, at generation. The token cannot be recovered
+		// later — only reset with --reset-auth.
+		axiosd.PrintAuthTokenBanner(os.Stderr, newAuthToken, false)
+	}
 
 	// Master key for credential encryption at rest (AES-256-GCM).
 	secretsStore, err := secrets.NewStore(filepath.Join(dataDir, "master.key"))
@@ -143,6 +168,18 @@ func main() {
 	// tool call, with a WebSocket approval flow for approval_required tiers.
 	server.SetPermissionChecker(loadPermissionPolicy(cfg, logger))
 	server.SetApprovalTimeout(time.Duration(cfg.Permissions.ApprovalTimeoutSeconds) * time.Second)
+
+	// Fail-closed admin auth on every /api, /ws and /v1 route: the middleware
+	// wraps the mux inside ListenAndServe, and SetAuth pins the websocket
+	// origin policy. The admin token doubles as a bearer key for API clients.
+	server.SetAuth(axiosd.NewAuthManager(authStore, axiosd.AuthOptions{
+		Enabled:        cfg.Server.AuthEnabled(),
+		SessionTTL:     time.Duration(cfg.Server.Auth.SessionTTLHours) * time.Hour,
+		AllowedOrigins: cfg.Server.Auth.AllowedOrigins,
+	}, logger))
+	if !cfg.Server.AuthEnabled() {
+		logger.Warn("admin authentication is DISABLED (server.auth.enabled=false) — every endpoint is unauthenticated")
+	}
 
 	// Background coding agent: a supervised `opencode serve` instance for
 	// delegated self-coding tasks, with its permission asks bridged into the
