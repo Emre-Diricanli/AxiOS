@@ -17,6 +17,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 
+	"github.com/axios-os/axios/internal/obsidianctl"
 	"github.com/axios-os/axios/pkg/mcp"
 	"github.com/axios-os/axios/pkg/permissions"
 	"github.com/axios-os/axios/pkg/providers"
@@ -65,6 +66,12 @@ type Server struct {
 	// xAI SuperGrok subscription OAuth (device-code flow), created lazily.
 	xaiOAuthOnce sync.Once
 	xaiOAuthFlow *XAIOAuth
+
+	// Obsidian vault integration: the manager re-resolves the configured
+	// vault on every call so UI vault switches apply immediately (see
+	// internal/obsidianctl and obsidian_api.go). Nil only when the main.go
+	// wiring is bypassed (unit tests) — handlers treat that as unconfigured.
+	obsidian *obsidianctl.Manager
 
 	// Admin authentication: token/session verification, origin policy, and
 	// the fail-closed middleware around the whole mux (see auth.go). Nil only
@@ -146,6 +153,8 @@ You have access to system tools that let you:
 - axios-network > tailscale_up / tailscale_down: Connect or disconnect the Tailscale VPN (user approval required)
 - axios-git > git_status / git_log / git_diff / git_branches / git_show / git_remotes: Inspect git repositories: working tree status, history, diffs, branches, and remotes
 - axios-git > git_pull / git_clone / git_checkout / git_commit / git_push: Modify git repositories: fast-forward pull, clone, switch branches, commit, push (user approval required)
+- axios-obsidian > search_notes / read_note / list_notes / vault_info: Search and read the user's Obsidian vault (personal Markdown notes with frontmatter and #tags)
+- axios-obsidian > write_note / append_note / delete_note: Create, append to, or delete notes in the user's Obsidian vault (user approval required)
 
 IMPORTANT: When the user asks you to DO something, USE THE TOOLS TO DO IT. Never just show commands or explain how — actually execute them using run_command or the appropriate tool.
 
@@ -416,6 +425,14 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/code/models", s.handleCodeModels)
 	mux.HandleFunc("/api/code/model", s.handleCodeModel)
 	mux.HandleFunc("/api/code/chat-diff", s.handleCodeChatDiff)
+
+	// Obsidian vault integration (internal/obsidianctl). Contract:
+	// docs/obsidian-api.md.
+	mux.HandleFunc("/api/obsidian/status", s.handleObsidianStatus)
+	mux.HandleFunc("/api/obsidian/vault", s.handleObsidianVault)
+	mux.HandleFunc("/api/obsidian/notes", s.handleObsidianNotes)
+	mux.HandleFunc("/api/obsidian/note", s.handleObsidianNote)
+	mux.HandleFunc("/api/obsidian/search", s.handleObsidianSearch)
 
 	// First-boot setup wizard
 	mux.HandleFunc("/api/setup/status", s.handleSetupStatus)

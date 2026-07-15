@@ -13,6 +13,7 @@ build:
 	go build -o bin/axios-ollama ./cmd/axios-ollama
 	go build -o bin/axios-network ./cmd/axios-network
 	go build -o bin/axios-git ./cmd/axios-git
+	go build -o bin/axios-obsidian ./cmd/axios-obsidian
 
 # Build individual binaries
 axiosd:
@@ -32,6 +33,7 @@ dev-mcp:
 	@go run ./cmd/axios-ollama --socket $(SOCKET_DIR)/axios-ollama.sock &
 	@go run ./cmd/axios-network --socket $(SOCKET_DIR)/axios-network.sock &
 	@go run ./cmd/axios-git --socket $(SOCKET_DIR)/axios-git.sock &
+	@go run ./cmd/axios-obsidian --socket $(SOCKET_DIR)/axios-obsidian.sock &
 	@echo "MCP servers started. Sockets in $(SOCKET_DIR)/"
 
 dev-axiosd:

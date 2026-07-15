@@ -10,7 +10,7 @@ model.
 ## Project structure
 
 - `cmd/axiosd/` — daemon entry point (config load, provider resolution, wiring)
-- `cmd/axios-fs/`, `cmd/axios-system/`, `cmd/axios-docker/`, `cmd/axios-ollama/`, `cmd/axios-network/`, `cmd/axios-git/` — active MCP servers; `cmd/axios-{gpu,media}/` are stubs
+- `cmd/axios-fs/`, `cmd/axios-system/`, `cmd/axios-docker/`, `cmd/axios-ollama/`, `cmd/axios-network/`, `cmd/axios-git/`, `cmd/axios-obsidian/` — active MCP servers; `cmd/axios-{gpu,media}/` are stubs
 - `internal/axiosd/` — daemon internals: HTTP/WS server, agentic chat loop,
   provider runtime, sessions, permission middleware + WebSocket approval flow,
   opencode manager/API/task store, cloud/local router, MCP lifecycle
@@ -19,6 +19,7 @@ model.
 - `internal/ollamactl/` — shared Ollama HTTP API client (daemon model-management handlers + axios-ollama MCP server)
 - `internal/netctl/` — network inspection (interfaces, DNS, ping) + tailscale CLI wrapper (axios-network MCP server)
 - `internal/gitctl/` — git CLI wrapper with strict path/ref/clone-URL validation (axios-git MCP server)
+- `internal/obsidianctl/` — Obsidian vault engine: containment-checked vault-relative paths, frontmatter/tag parsing, search, plus the vault-selection `Manager` (daemon `/api/obsidian` handlers + axios-obsidian MCP server; contract: `docs/obsidian-api.md`)
 - `pkg/providers/` — provider profiles + registry, transports, error classifier,
   model-name normalization; canonical message format is the OpenAI Chat
   Completions shape
@@ -73,7 +74,8 @@ model.
 - MCP transport: Unix sockets, default `/tmp/axios-mcp` (config `mcp.socket_dir`)
 - Runtime state: `$AXIOS_DATA_DIR` (default `~/.axios`) — `master.key`,
   `auth.json`, `providers.json`, `hosts.json`, `sessions.json`,
-  `opencode_tasks.json`
+  `opencode_tasks.json`, `obsidian.json` (active vault path; re-read per call
+  so vault switches reach the MCP server without a restart)
 - Tests: table-driven, `_test.go` beside source, `httptest` for HTTP;
   integration tests in `test/`
 - Design spec: `docs/phase1-design.md` is the authoritative Phase 1 reference

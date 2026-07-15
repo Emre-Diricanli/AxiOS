@@ -60,6 +60,24 @@ func TestLoadDaemonDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadDaemonObsidian(t *testing.T) {
+	cfg, err := LoadDaemon(writeConfig(t, "obsidian:\n  vault: /Users/me/Vault\n"))
+	if err != nil {
+		t.Fatalf("LoadDaemon: %v", err)
+	}
+	if cfg.Obsidian.Vault != "/Users/me/Vault" {
+		t.Errorf("Obsidian.Vault = %q, want /Users/me/Vault", cfg.Obsidian.Vault)
+	}
+
+	cfg, err = LoadDaemon(writeConfig(t, "routing:\n  mode: auto\n"))
+	if err != nil {
+		t.Fatalf("LoadDaemon: %v", err)
+	}
+	if cfg.Obsidian.Vault != "" {
+		t.Errorf("Obsidian.Vault = %q, want empty (unconfigured) by default", cfg.Obsidian.Vault)
+	}
+}
+
 func TestLoadDaemonPermissionsOverrides(t *testing.T) {
 	cfg, err := LoadDaemon(writeConfig(t, `
 permissions:

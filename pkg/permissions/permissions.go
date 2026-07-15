@@ -141,6 +141,10 @@ trusted:
   - "axios-git__git_branches"
   - "axios-git__git_show"
   - "axios-git__git_remotes"
+  - "axios-obsidian__search_notes"
+  - "axios-obsidian__read_note"
+  - "axios-obsidian__list_notes"
+  - "axios-obsidian__vault_info"
 approval_required:
   - "axios-fs__write_file"
   - "axios-fs__delete_file"
@@ -163,6 +167,9 @@ approval_required:
   - "axios-git__git_checkout"
   - "axios-git__git_commit"
   - "axios-git__git_push"
+  - "axios-obsidian__write_note"
+  - "axios-obsidian__append_note"
+  - "axios-obsidian__delete_note"
   - "opencode__*"
 `
 

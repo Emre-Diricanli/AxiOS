@@ -12,6 +12,7 @@ import (
 
 	"github.com/axios-os/axios/internal/axiosd"
 	"github.com/axios-os/axios/internal/config"
+	"github.com/axios-os/axios/internal/obsidianctl"
 	"github.com/axios-os/axios/pkg/logging"
 	"github.com/axios-os/axios/pkg/permissions"
 	"github.com/axios-os/axios/pkg/providers"
@@ -196,6 +197,17 @@ func main() {
 	if err := opencodeMgr.Start(); err != nil {
 		logger.Warn("failed to start opencode manager", "error", err)
 	}
+
+	// Obsidian vault integration: config obsidian.vault seeds the runtime
+	// state file ($AXIOS_DATA_DIR/obsidian.json) on first boot; once the web
+	// UI sets a vault (PUT /api/obsidian/vault) the state file wins. The
+	// axios-obsidian MCP server reads the same state file per call, so vault
+	// switches reach it without a restart. Unconfigured is a normal state.
+	obsidianMgr := obsidianctl.NewManager(dataDir, cfg.Obsidian.Vault)
+	if err := obsidianMgr.SeedState(); err != nil {
+		logger.Warn("failed to seed obsidian vault state from config", "error", err)
+	}
+	server.SetObsidian(obsidianMgr)
 
 	// Initialize host store; switching hosts swaps the management client and
 	// invalidates the provider runtime's cached local client.

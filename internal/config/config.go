@@ -19,6 +19,7 @@ type Daemon struct {
 	MCP               MCPConfig          `yaml:"mcp"`
 	Gateway           GatewayConfig      `yaml:"gateway"`
 	Permissions       PermissionsConfig  `yaml:"permissions"`
+	Obsidian          ObsidianConfig     `yaml:"obsidian"`
 
 	// Anthropic is the deprecated legacy credential section. It is still
 	// parsed and mapped onto the model-agnostic schema; new configs should
@@ -116,6 +117,14 @@ type MCPConfig struct {
 type GatewayConfig struct {
 	Enabled bool   `yaml:"enabled"` // Enable CasaOS-Gateway registration
 	URL     string `yaml:"url"`     // Gateway URL (auto-discovered if empty)
+}
+
+// ObsidianConfig configures the Obsidian vault integration. Vault seeds the
+// runtime vault selection until the web UI persists a choice into
+// $AXIOS_DATA_DIR/obsidian.json, which wins from then on; empty means
+// unconfigured until the UI sets a vault.
+type ObsidianConfig struct {
+	Vault string `yaml:"vault"`
 }
 
 // PermissionsConfig controls tiered-trust enforcement on model-initiated

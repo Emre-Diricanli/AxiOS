@@ -59,6 +59,14 @@ ollama:
   port: 11434
   model: "llama3.1:8b"
 
+obsidian:
+  # Obsidian vault integration (direct filesystem access — the Obsidian app
+  # is not required; any directory of .md files works). This path seeds the
+  # runtime vault selection until the web UI overrides it: once a vault is
+  # set through Settings (PUT /api/obsidian/vault), the state file
+  # $AXIOS_DATA_DIR/obsidian.json wins and this value is ignored.
+  vault: "/Users/emrediricanli/Documents/Obsidian"
+
 permissions:
   # Tiered-trust policy enforced on every model-initiated tool call.
   # Falls back to the repo's configs/permissions.yaml (dev checkouts) and
@@ -84,6 +92,7 @@ mcp:
     - axios-ollama
     - axios-network
     - axios-git
+    - axios-obsidian
   # Future servers:
   #   - axios-gpu
   #   - axios-media

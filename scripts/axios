@@ -42,6 +42,8 @@ case "${1:-start}" in
     PIDS+=($!)
     go run ./cmd/axios-git --socket "$SOCKET_DIR/axios-git.sock" &
     PIDS+=($!)
+    go run ./cmd/axios-obsidian --socket "$SOCKET_DIR/axios-obsidian.sock" &
+    PIDS+=($!)
     sleep 1
 
     # 2. axiosd daemon
@@ -77,6 +79,7 @@ case "${1:-start}" in
     pkill -f "axios-ollama" 2>/dev/null || true
     pkill -f "axios-network" 2>/dev/null || true
     pkill -f "axios-git" 2>/dev/null || true
+    pkill -f "axios-obsidian" 2>/dev/null || true
     pkill -f "cmd/axiosd" 2>/dev/null || true
     pkill -f "vite.*axios" 2>/dev/null || true
     rm -f "$SOCKET_DIR"/*.sock
