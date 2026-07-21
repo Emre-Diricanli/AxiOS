@@ -39,10 +39,10 @@ function ModalOverlay({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+        className="absolute inset-0 overlay-backdrop"
         onClick={onClose}
       />
-      <div className="relative glass rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto scrollbar-none mx-4 p-6 shadow-2xl animate-scale-in">
+      <div className="relative bg-surface border border-border rounded-lg w-full max-w-lg max-h-[80vh] overflow-y-auto scrollbar-none mx-4 p-6 shadow-2xl">
         {children}
       </div>
     </div>
@@ -420,10 +420,10 @@ function LogsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+        className="absolute inset-0 overlay-backdrop"
         onClick={onClose}
       />
-      <div className="relative glass rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col mx-4 shadow-2xl overflow-hidden animate-scale-in">
+      <div className="relative bg-surface border border-border rounded-lg w-full max-w-3xl max-h-[85vh] flex flex-col mx-4 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="shrink-0 px-6 py-4 flex items-center justify-between border-b border-border">
           <div>
@@ -716,7 +716,7 @@ export function ContainersPage() {
     return (
       <div className="p-6 space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="glass rounded-xl p-5 h-16 animate-pulse" />
+          <div key={i} className="border-b border-border h-16 bg-secondary animate-pulse" />
         ))}
       </div>
     );
@@ -725,17 +725,17 @@ export function ContainersPage() {
   return (
     <div className="h-full overflow-y-auto scrollbar-none flex flex-col">
       {/* Header */}
-      <div className="shrink-0 px-6 py-5 flex items-center justify-between animate-fade-up">
+      <div className="shrink-0 px-6 py-5 flex items-center justify-between border-b border-border">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold tracking-tight">Containers</h2>
-          <span className="rounded-full bg-primary/15 text-primary text-[11px] font-mono font-medium px-2.5 py-0.5">
+          <span className="rounded bg-secondary text-muted-foreground text-xs font-mono font-medium px-2 py-0.5">
             {runningCount}/{docker.containers.length}
           </span>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowCompose(true)}
-            className="rounded-lg bg-secondary text-foreground px-3.5 py-2 text-xs font-medium hover:bg-secondary/80 transition-colors flex items-center gap-2"
+            className="rounded-md border border-border bg-secondary text-foreground px-3.5 py-2 text-xs font-medium hover:bg-secondary/80 transition-colors flex items-center gap-2"
           >
             <svg
               width="14"
@@ -754,7 +754,7 @@ export function ContainersPage() {
           </button>
           <button
             onClick={() => setShowRun(true)}
-            className="rounded-lg bg-primary text-primary-foreground px-3.5 py-2 text-xs font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+            className="rounded-md bg-primary text-primary-foreground px-3.5 py-2 text-xs font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
           >
             <svg
               width="14"
@@ -783,7 +783,7 @@ export function ContainersPage() {
 
       {/* Table header */}
       <div className="shrink-0 px-6">
-        <div className="flex items-center gap-4 px-4 py-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+        <div className="flex items-center gap-4 px-4 py-2 text-xs uppercase tracking-wider font-medium text-muted-foreground border-b border-border">
           <div className="w-2.5 shrink-0" />
           <div className="flex-1 min-w-0">Container</div>
           <div className="hidden md:block w-28 shrink-0">Status</div>
@@ -796,8 +796,8 @@ export function ContainersPage() {
       {/* Container list */}
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none px-6 pb-6">
         {docker.containers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center animate-scale-in">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl glass flex items-center justify-center glow-primary">
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-10 h-10 mx-auto mb-4 rounded-md surface-raised flex items-center justify-center">
               <svg
                 width="28"
                 height="28"
@@ -829,9 +829,9 @@ export function ContainersPage() {
             </button>
           </div>
         ) : (
-          <div className="glass-subtle rounded-xl overflow-hidden divide-y divide-border">
-            {docker.containers.map((c, i) => (
-              <div key={c.id} className="animate-fade-up" style={{ animationDelay: `${i * 50}ms` }}>
+          <div className="border-y border-border divide-y divide-border">
+            {docker.containers.map((c) => (
+              <div key={c.id}>
               <ContainerRow
                 container={c}
                 stat={getStatForContainer(c.id)}

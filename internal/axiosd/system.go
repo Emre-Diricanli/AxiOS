@@ -25,6 +25,7 @@ type SystemStats struct {
 	CPU      CPUStats    `json:"cpu"`
 	Memory   MemStats    `json:"memory"`
 	Disk     []DiskStats `json:"disk"`
+	GPU      []GPUStats  `json:"gpu"`
 	Network  NetStats    `json:"network"`
 }
 
@@ -54,6 +55,17 @@ type DiskStats struct {
 	UsagePercent   float64 `json:"usage_percent"`
 }
 
+// GPUStats holds live NVIDIA GPU utilization and memory information.
+type GPUStats struct {
+	Index              int     `json:"index"`
+	Name               string  `json:"name"`
+	UtilizationPercent float64 `json:"utilization_percent"`
+	MemoryTotalBytes   uint64  `json:"memory_total_bytes"`
+	MemoryUsedBytes    uint64  `json:"memory_used_bytes"`
+	MemoryUsagePercent float64 `json:"memory_usage_percent"`
+	TemperatureC       float64 `json:"temperature_c"`
+}
+
 // NetStats holds network information.
 type NetStats struct {
 	Hostname   string         `json:"hostname"`
@@ -80,10 +92,62 @@ func gatherSystemStats() (*SystemStats, error) {
 		CPU:      getCPUStats(),
 		Memory:   getMemoryStats(),
 		Disk:     getDiskStats(),
+		GPU:      getGPUStats(),
 		Network:  getNetworkStats(hostname),
 	}
 
 	return stats, nil
+}
+
+func GatherSystemStats() (*SystemStats, error) {
+	return gatherSystemStats()
+}
+
+func getGPUStats() []GPUStats {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	out, err := exec.Command(
+		"nvidia-smi",
+		"--query-gpu=index,name,utilization.gpu,memory.total,memory.used,temperature.gpu",
+		"--format=csv,noheader,nounits",
+	).Output()
+	if err != nil {
+		return nil
+	}
+	return parseNvidiaSMI(string(out))
+}
+
+func parseNvidiaSMI(output string) []GPUStats {
+	var gpus []GPUStats
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		parts := strings.Split(line, ",")
+		if len(parts) != 6 {
+			continue
+		}
+		index, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			continue
+		}
+		utilization, _ := strconv.ParseFloat(strings.TrimSpace(parts[2]), 64)
+		totalMiB, _ := strconv.ParseUint(strings.TrimSpace(parts[3]), 10, 64)
+		usedMiB, _ := strconv.ParseUint(strings.TrimSpace(parts[4]), 10, 64)
+		temperature, _ := strconv.ParseFloat(strings.TrimSpace(parts[5]), 64)
+		memoryPercent := 0.0
+		if totalMiB > 0 {
+			memoryPercent = math.Round(float64(usedMiB)/float64(totalMiB)*1000) / 10
+		}
+		gpus = append(gpus, GPUStats{
+			Index:              index,
+			Name:               strings.TrimSpace(parts[1]),
+			UtilizationPercent: utilization,
+			MemoryTotalBytes:   totalMiB * 1024 * 1024,
+			MemoryUsedBytes:    usedMiB * 1024 * 1024,
+			MemoryUsagePercent: memoryPercent,
+			TemperatureC:       temperature,
+		})
+	}
+	return gpus
 }
 
 // getKernel returns the kernel version string.

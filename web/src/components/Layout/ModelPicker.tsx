@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { toastError } from "@/hooks/useToast";
+import { ProviderLogo } from "@/components/Models/ProviderLogo";
 
 interface PickerModel {
   name: string;
@@ -6,24 +8,6 @@ interface PickerModel {
   providerName: string;
   backend: "cloud" | "local" | "supergrok";
   active: boolean;
-}
-
-// Badge letter + colors per backend.
-function BackendBadge({ backend, small }: { backend: PickerModel["backend"]; small?: boolean }) {
-  const styles =
-    backend === "cloud"
-      ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
-      : backend === "local"
-        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-        : "bg-violet-500/20 text-violet-400 border-violet-500/30";
-  const letter = backend === "cloud" ? "C" : backend === "local" ? "L" : "S";
-  return (
-    <div
-      className={`${small ? "w-4 h-4" : "w-5 h-5"} rounded-md flex items-center justify-center text-[8px] font-bold border shrink-0 ${styles}`}
-    >
-      {letter}
-    </div>
-  );
 }
 
 export function ModelPicker() {
@@ -41,6 +25,9 @@ export function ModelPicker() {
         fetch("/api/models/current"),
         fetch("/api/code/models"),
       ]);
+      if (![providersRes, installedRes, currentRes, codeModelsRes].some((response) => response.ok)) {
+        throw new Error("all model endpoints failed");
+      }
 
       const all: PickerModel[] = [];
       let currentModel = "";
@@ -103,7 +90,7 @@ export function ModelPicker() {
       // Auto-expand the group holding the active model on first load.
       setExpanded((prev) => prev ?? all.find((m) => m.active)?.providerName ?? null);
     } catch {
-      // ignore
+      toastError("Models unavailable", "Could not refresh model and provider status.");
     }
   }, []);
 
@@ -125,21 +112,23 @@ export function ModelPicker() {
     setLoading(true);
     try {
       if (model.backend === "cloud") {
-        await fetch("/api/providers/activate", {
+        const response = await fetch("/api/providers/activate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ provider: model.provider, model: model.name }),
         });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
       } else {
-        await fetch("/api/models/switch", {
+        const response = await fetch("/api/models/switch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ model: model.name, backend: model.backend }),
         });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
       }
       await fetchAll();
     } catch {
-      // ignore
+      toastError("Model switch failed", `Could not activate ${model.name}.`);
     }
     setLoading(false);
     setOpen(false);
@@ -163,12 +152,12 @@ export function ModelPicker() {
           setOpen(!open);
           if (!open) fetchAll();
         }}
-        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg glass-subtle hover:bg-accent transition-colors"
+        className="h-7 flex items-center gap-2 px-2 border border-border bg-surface rounded-md hover:bg-accent transition-colors"
       >
-        <BackendBadge backend={active?.backend ?? "cloud"} small />
+        <ProviderLogo provider={active?.provider ?? "cloud"} small />
         <span
           key={displayName}
-          className="text-[11px] font-mono text-foreground/80 max-w-[120px] truncate animate-scale-in"
+          className="text-[11px] text-foreground/80 max-w-[120px] truncate"
         >
           {displayName}
         </span>
@@ -178,7 +167,7 @@ export function ModelPicker() {
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-2 w-72 rounded-xl glass border border-border shadow-2xl z-50 overflow-hidden">
+        <div className="absolute top-full right-0 mt-2 w-72 rounded-lg bg-surface border border-border shadow-2xl z-50 overflow-hidden">
           <div className="max-h-80 overflow-y-auto scrollbar-none">
             {[...grouped.entries()].map(([providerName, providerModels]) => {
               const isExpanded = expanded === providerName;
@@ -189,12 +178,12 @@ export function ModelPicker() {
                     onClick={() => setExpanded(isExpanded ? null : providerName)}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent/50 transition-colors"
                   >
-                    <BackendBadge backend={providerModels[0].backend} />
+                    <ProviderLogo provider={providerModels[0].provider} small />
                     <span className="text-[11px] font-semibold uppercase tracking-widest text-foreground/80 flex-1 truncate">
                       {providerName}
                     </span>
                     {hasActive && !isExpanded && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_rgba(99,102,241,0.5)] shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                     )}
                     <span className="text-[10px] font-mono text-muted-foreground shrink-0">
                       {providerModels.length}
@@ -225,7 +214,7 @@ export function ModelPicker() {
                       >
                         <p className="text-xs font-mono truncate flex-1">{m.name}</p>
                         {m.active && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_rgba(99,102,241,0.5)] shrink-0" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                         )}
                       </button>
                     ))}

@@ -3,45 +3,7 @@ import { useProviders } from "@/hooks/useProviders";
 import { useXAIOAuth } from "@/hooks/useXAIOAuth";
 import type { CloudProvider } from "@/types/providers";
 import { toastSuccess, toastInfo, toastError } from "@/hooks/useToast";
-
-/* ── Provider brand colors ─────────────────────────────── */
-
-const PROVIDER_COLORS: Record<string, string> = {
-  anthropic: "bg-orange-500",
-  openai: "bg-green-500",
-  google: "bg-blue-500",
-  mistral: "bg-orange-600",
-  groq: "bg-purple-500",
-  together: "bg-cyan-500",
-  openrouter: "bg-indigo-500",
-  deepseek: "bg-blue-600",
-  xai: "bg-gray-400",
-  cohere: "bg-red-400",
-  perplexity: "bg-teal-500",
-};
-
-function getProviderColor(name: string): string {
-  const key = name.toLowerCase();
-  for (const [k, v] of Object.entries(PROVIDER_COLORS)) {
-    if (key.includes(k)) return v;
-  }
-  return "bg-primary";
-}
-
-/* ── Provider Logo (first-letter circle) ───────────────── */
-
-function ProviderLogo({ name }: { name: string }) {
-  const color = getProviderColor(name);
-  return (
-    <div
-      className={`w-9 h-9 rounded-xl ${color} flex items-center justify-center shrink-0`}
-    >
-      <span className="text-sm font-bold text-white leading-none">
-        {name.charAt(0).toUpperCase()}
-      </span>
-    </div>
-  );
-}
+import { ProviderLogo } from "@/components/Models/ProviderLogo";
 
 /* ── SuperGrok subscription connect (xAI card only) ────── */
 
@@ -151,7 +113,7 @@ function SuperGrokConnect() {
   // Pending: show the user code and the approval link, poll until resolved.
   if (status?.state === "pending") {
     return (
-      <div className="rounded-lg glass-subtle border border-primary/20 px-3 py-2 flex flex-col gap-1.5">
+      <div className="rounded-lg surface-raised border-primary/20 px-3 py-2 flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] text-muted-foreground">
             Enter this code on x.ai:
@@ -274,12 +236,12 @@ function ProviderCard({
 
   return (
     <div
-      className={`glass rounded-xl p-4 flex flex-col gap-3 transition-all duration-200 hover:bg-accent/30 ${borderClass} ${dimClass}`}
+      className={`surface-panel rounded-xl p-4 flex flex-col gap-3 transition-all duration-200 hover:bg-surface-hover ${borderClass} ${dimClass}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          <ProviderLogo name={provider.name} />
+          <ProviderLogo provider={provider.id || provider.name} />
           <div className="min-w-0">
             <h4 className="text-sm font-bold text-foreground truncate">
               {provider.name}
@@ -409,7 +371,7 @@ function ProviderCard({
                 if (e.key === "Enter") handleConnect();
               }}
               placeholder="API Key"
-              className="w-full px-3 py-2 pr-8 rounded-lg text-xs font-mono glass-subtle text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              className="w-full px-3 py-2 pr-8 rounded-lg text-xs font-mono field-control placeholder:text-muted-foreground"
             />
             <button
               type="button"
@@ -508,7 +470,7 @@ export function ProvidersPanel() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="glass rounded-xl p-4 h-32 animate-pulse" />
+            <div key={i} className="surface-panel rounded-xl p-4 h-32 animate-pulse" />
           ))}
         </div>
       </div>
@@ -545,8 +507,8 @@ export function ProvidersPanel() {
 
       {/* Provider grid */}
       {sorted.length === 0 ? (
-        <div className="glass rounded-xl p-6 flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 rounded-2xl glass flex items-center justify-center mb-3 glow-primary">
+        <div className="surface-panel rounded-xl p-6 flex flex-col items-center justify-center text-center">
+          <div className="w-12 h-12 rounded-2xl surface-raised flex items-center justify-center mb-3">
             <svg
               width="20"
               height="20"

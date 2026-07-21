@@ -15,6 +15,14 @@ export interface MarketplaceModel {
   category: string; // "general" | "code" | "vision" | "embedding"
   parameters: string;
   recommended: boolean;
+  source?: "ollama" | "huggingface";
+  pull_name?: string;
+  author?: string;
+  downloads?: number;
+  likes?: number;
+  last_modified?: string;
+  license?: string;
+  url?: string;
 }
 
 export interface PullProgress {

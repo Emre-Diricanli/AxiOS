@@ -1,4 +1,4 @@
-.PHONY: all build axiosd web clean dev test test-web vet start stop
+.PHONY: all build axiosd telemetry web clean dev test test-web vet start stop
 
 SOCKET_DIR ?= /tmp/axios-mcp
 
@@ -13,11 +13,15 @@ build:
 	go build -o bin/axios-ollama ./cmd/axios-ollama
 	go build -o bin/axios-network ./cmd/axios-network
 	go build -o bin/axios-git ./cmd/axios-git
+	go build -o bin/axios-telemetry ./cmd/axios-telemetry
 	go build -o bin/axios-obsidian ./cmd/axios-obsidian
 
 # Build individual binaries
 axiosd:
 	go build -o bin/axiosd ./cmd/axiosd
+
+telemetry:
+	go build -o bin/axios-telemetry ./cmd/axios-telemetry
 
 # Web UI
 web:

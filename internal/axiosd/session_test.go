@@ -174,3 +174,29 @@ func TestConvertLegacyMessagesSkipCounting(t *testing.T) {
 		})
 	}
 }
+
+// TestNewSessionStoreExplicitDataDir verifies that NewSessionStore honors an
+// explicit data directory (the AXIOS_DATA_DIR-resolved path) instead of
+// hardcoding ~/.axios.
+func TestNewSessionStoreExplicitDataDir(t *testing.T) {
+	dir := t.TempDir()
+
+	ss := NewSessionStore(dir, testLogger())
+	sess := ss.Create("s1")
+	sess.AddMessage(providers.Message{Role: "user", Content: "hello"})
+	if err := ss.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	path := filepath.Join(dir, "sessions.json")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("sessions file not in explicit data dir: %v", err)
+	}
+
+	// A new store over the same dir loads the saved session back.
+	ss2 := NewSessionStore(dir, testLogger())
+	got := ss2.Get("s1")
+	if got.MessageCount() != 1 || got.GetMessages()[0].Content != "hello" {
+		t.Errorf("reloaded session = %+v, want 1 message %q", got.GetMessages(), "hello")
+	}
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { SystemStats } from "@/types/system";
+import { AxiosMark } from "@/components/brand/AxiosLogo";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -111,7 +112,7 @@ function ProgressDots({ current }: { current: number }) {
             <div
               className={`h-2.5 rounded-full transition-all duration-500 ease-out ${
                 isActive
-                  ? "w-8 bg-gradient-to-r from-primary to-purple-400 shadow-[0_0_16px_rgba(99,102,241,0.6)]"
+                  ? "w-8 bg-primary"
                   : isDone
                     ? "w-2.5 bg-primary/60"
                     : "w-2.5 bg-white/10"
@@ -176,19 +177,15 @@ function NavButtons({
 function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center text-center">
-      {/* Animated background rings */}
+      {/* Animated logo */}
       <div className="relative mb-10">
         <div className="absolute inset-0 w-24 h-24 rounded-3xl bg-primary/20 animate-pulse-ring" />
         <div className="absolute inset-0 w-24 h-24 rounded-3xl bg-primary/10 animate-pulse-ring delay-700" />
-        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary via-purple-500 to-indigo-400 flex items-center justify-center shadow-[0_0_60px_rgba(99,102,241,0.3),0_0_120px_rgba(99,102,241,0.1)] animate-pulse-slow animate-float relative z-10">
-          <span className="text-3xl font-black text-white tracking-tighter select-none">
-            Ax
-          </span>
-        </div>
+        <AxiosMark className="w-20 h-20 rounded-[1.25rem] relative z-10 shadow-[0_0_48px_rgba(120,144,248,0.35)]" />
       </div>
 
       <h1 className="text-4xl font-bold text-foreground tracking-tight mb-3 text-glow animate-fade-up">
-        Welcome to Axi<span className="bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">OS</span>
+        Welcome to Axi<span className="text-primary">OS</span>
       </h1>
       <p className="text-lg text-muted-foreground mb-2 animate-fade-up delay-200">
         Your AI-native operating system
@@ -200,7 +197,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 
       <button
         onClick={onNext}
-        className="px-8 py-3.5 rounded-2xl text-base font-semibold bg-gradient-to-r from-primary to-purple-500 text-primary-foreground shadow-[0_0_30px_rgba(99,102,241,0.35)] hover:shadow-[0_0_50px_rgba(99,102,241,0.6)] hover:scale-105 active:scale-95 transition-all duration-300 animate-fade-up delay-600"
+        className="px-6 py-3 rounded-md text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
       >
         Get Started
       </button>
@@ -344,7 +341,7 @@ function StepHardware({
         {cards.map((c, i) => (
           <div
             key={c.label}
-            className={`glass rounded-xl p-5 flex items-start gap-4 animate-fade-up`}
+            className={`surface-panel rounded-xl p-5 flex items-start gap-4 animate-fade-up`}
             style={{ animationDelay: `${200 + i * 150}ms` }}
           >
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
@@ -588,7 +585,7 @@ function StepAI({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Cloud AI */}
-        <div className="glass rounded-xl p-6">
+        <div className="surface-panel rounded-xl p-6">
           <h3 className="text-base font-semibold mb-1 flex items-center gap-2">
             <svg
               width="18"
@@ -710,7 +707,7 @@ function StepAI({
         </div>
 
         {/* Local AI */}
-        <div className="glass rounded-xl p-6">
+        <div className="surface-panel rounded-xl p-6">
           <h3 className="text-base font-semibold mb-1 flex items-center gap-2">
             <svg
               width="18"
@@ -958,7 +955,7 @@ function StepPersonalize({
             <button
               key={p.id}
               onClick={() => toggleProfile(p.id)}
-              className={`glass rounded-xl p-4 text-left transition-all duration-200 ${
+              className={`surface-panel rounded-xl p-4 text-left transition-all duration-200 ${
                 active
                   ? "border-primary/40 bg-primary/10 shadow-[0_0_15px_rgba(99,102,241,0.15)]"
                   : "hover:bg-white/5"
@@ -1068,7 +1065,7 @@ function StepReady({
       </div>
 
       <h2 className="text-3xl font-bold mb-3 animate-fade-up delay-300">
-        Axi<span className="bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">OS</span> is Ready
+        Axi<span className="text-primary">OS</span> is Ready
       </h2>
       <p className="text-sm text-muted-foreground mb-8 max-w-md animate-fade-up delay-500">
         Your system is configured and ready to go. Here&apos;s a summary of
@@ -1077,7 +1074,7 @@ function StepReady({
 
       {/* Summary cards */}
       <div className="w-full max-w-md space-y-3 text-left mb-10">
-        <div className="glass rounded-xl p-4 flex items-center gap-3 animate-fade-up delay-600">
+        <div className="surface-panel rounded-xl p-4 flex items-center gap-3 animate-fade-up delay-600">
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
             <svg
               width="16"
@@ -1098,7 +1095,7 @@ function StepReady({
           </div>
         </div>
 
-        <div className="glass rounded-xl p-4 flex items-center gap-3 animate-fade-up delay-700">
+        <div className="surface-panel rounded-xl p-4 flex items-center gap-3 animate-fade-up delay-700">
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
             <svg
               width="16"
@@ -1123,7 +1120,7 @@ function StepReady({
         </div>
 
         {profileLabels && (
-          <div className="glass rounded-xl p-4 flex items-center gap-3">
+          <div className="surface-panel rounded-xl p-4 flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
               <svg
                 width="16"
@@ -1157,7 +1154,7 @@ function StepReady({
         <button
           onClick={onComplete}
           disabled={completing}
-          className="px-8 py-3.5 rounded-2xl text-base font-semibold bg-gradient-to-r from-primary to-purple-500 text-primary-foreground shadow-[0_0_30px_rgba(99,102,241,0.35)] hover:shadow-[0_0_50px_rgba(99,102,241,0.6)] hover:scale-105 active:scale-95 transition-all duration-300 disabled:opacity-50 flex items-center gap-2 animate-fade-up delay-1000"
+          className="px-6 py-3 rounded-md text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {completing && <Spinner className="w-4 h-4" />}
           Enter AxiOS

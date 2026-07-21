@@ -7,9 +7,24 @@ import { InputBar } from "./InputBar";
 import { DiffBlock, type DiffFile } from "./DiffBlock";
 import { TasksDrawer } from "./TasksDrawer";
 import type { ApprovalStatus, ChatMessage } from "@/types/messages";
+import { recordActivity } from "@/lib/activity";
+
+export type ChatDisplayMode = "docked" | "overlay" | "fullscreen";
+
+export interface ChatContextAction {
+  label: string;
+  prompt: string;
+}
 
 interface ChatPanelProps {
   newChatRef?: MutableRefObject<(() => void) | null>;
+  mode: ChatDisplayMode;
+  canDock: boolean;
+  contextActions: ChatContextAction[];
+  promptToSend?: string | null;
+  onPromptSent?: () => void;
+  onModeChange: (mode: ChatDisplayMode) => void;
+  onClose: () => void;
 }
 
 interface DisplayMessage {
@@ -62,7 +77,53 @@ function relativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-export function ChatPanel({ newChatRef }: ChatPanelProps) {
+const CHAT_MODES: { mode: ChatDisplayMode; label: string }[] = [
+  { mode: "docked", label: "Dock" },
+  { mode: "overlay", label: "Overlay" },
+  { mode: "fullscreen", label: "Focus" },
+];
+
+const EMPTY_STATE_ACTIONS: ChatContextAction[] = [
+  { label: "Inspect system", prompt: "Inspect this system and summarize its current health, resources, and anything requiring attention." },
+  { label: "Summarize logs", prompt: "Review recent system and service logs, then summarize warnings, failures, and likely causes." },
+  { label: "Diagnose storage", prompt: "Diagnose storage usage, identify what is consuming space, and recommend safe cleanup options." },
+  { label: "Start coding task", prompt: "Help me choose a useful coding task in my workspace and create a safe implementation plan." },
+];
+
+function ChatModeIcon({ mode }: { mode: ChatDisplayMode }) {
+  if (mode === "docked") {
+    return (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M15 4v16" />
+      </svg>
+    );
+  }
+  if (mode === "overlay") {
+    return (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <rect x="11" y="7" width="7" height="10" rx="1" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" />
+    </svg>
+  );
+}
+
+export function ChatPanel({
+  newChatRef,
+  mode,
+  canDock,
+  contextActions,
+  promptToSend,
+  onPromptSent,
+  onModeChange,
+  onClose,
+}: ChatPanelProps) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [codeMode, setCodeMode] = useState(false);
@@ -73,6 +134,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
+  const [panelError, setPanelError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamBufferRef = useRef("");
   const thinkingBufferRef = useRef("");
@@ -101,6 +163,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
         return [...prev, { id: "streaming", role: "assistant", ...patch }];
       });
     } else if (msg.type === "tool_use") {
+      recordActivity({ kind: "tool", title: msg.toolName ?? "Tool call", detail: msg.content, status: "pending" });
       setMessages((prev) => {
         const updated = [...prev];
         const last = updated[updated.length - 1];
@@ -113,6 +176,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
       streamBufferRef.current = "";
       thinkingBufferRef.current = "";
     } else if (msg.type === "approval_request") {
+      recordActivity({ kind: "approval", title: `Approval requested · ${msg.tool ?? "unknown tool"}`, detail: JSON.stringify(msg.params ?? {}), status: "pending" });
       setMessages((prev) => [
         ...prev,
         {
@@ -156,6 +220,12 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
           .then((data: { files?: DiffFile[] } | null) => {
             const files = data?.files ?? [];
             if (files.length === 0) return;
+            recordActivity({
+              kind: "files",
+              title: `${files.length} file${files.length === 1 ? "" : "s"} changed`,
+              detail: files.map((file) => file.file ?? "unknown file").join(", "),
+              status: "success",
+            });
             setMessages((prev) => {
               // Replace a previous diff card so the latest state shows once.
               const withoutOldDiff = prev.filter((m) => m.role !== "diff");
@@ -174,6 +244,12 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const respondToApproval = useCallback(
     (approvalId: string, approve: boolean) => {
       send({ type: "approval_response", id: approvalId, approve });
+      recordActivity({
+        kind: "approval",
+        title: approve ? "Approval granted" : "Approval denied",
+        detail: approvalId,
+        status: approve ? "success" : "denied",
+      });
       setMessages((prev) =>
         prev.map((m) =>
           m.role === "approval_request" && m.approvalId === approvalId && m.approvalStatus === "pending"
@@ -189,12 +265,14 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const fetchSessions = useCallback(async () => {
     try {
       const res = await fetch("/api/chat/sessions");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.sessions) {
         setSessions(data.sessions);
       }
+      setPanelError(null);
     } catch {
-      // ignore
+      setPanelError("Chat history is currently unavailable.");
     }
   }, []);
 
@@ -205,6 +283,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const createSession = useCallback(async () => {
     try {
       const res = await fetch("/api/chat/sessions", { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.id) {
         setSessionId(data.id);
@@ -214,7 +293,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
         await fetchSessions();
       }
     } catch {
-      // ignore
+      setPanelError("Could not create a new chat session.");
     }
   }, [fetchSessions]);
 
@@ -227,6 +306,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
     setHistoryOpen(false);
     try {
       const res = await fetch(`/api/chat/sessions/messages?id=${id}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.messages) {
         const displayMsgs: DisplayMessage[] = [];
@@ -253,7 +333,7 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
         setMessages(displayMsgs);
       }
     } catch {
-      // ignore
+      setPanelError("Could not load that conversation.");
     }
   }, []);
 
@@ -261,14 +341,15 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   const deleteSession = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await fetch(`/api/chat/sessions?id=${id}`, { method: "DELETE" });
+      const response = await fetch(`/api/chat/sessions?id=${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       await fetchSessions();
       if (id === sessionId) {
         setSessionId(null);
         setMessages([]);
       }
     } catch {
-      // ignore
+      setPanelError("Could not delete that conversation.");
     }
   }, [fetchSessions, sessionId]);
 
@@ -294,7 +375,8 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
               thinkingBufferRef.current = "";
               send({ type: "user", content, sessionId: data.id, mode, directory });
             }
-          });
+          })
+          .catch(() => setPanelError("Could not start the chat request."));
         return;
       }
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content }]);
@@ -335,6 +417,12 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
     return () => window.removeEventListener("axios-send-chat", handler);
   }, [handleSend]);
 
+  useEffect(() => {
+    if (!promptToSend || !connected || streaming) return;
+    handleSend(promptToSend);
+    onPromptSent?.();
+  }, [connected, handleSend, onPromptSent, promptToSend, streaming]);
+
   // Fetch active model on mount + poll every 3s for changes
   useEffect(() => {
     const fetchModel = () => {
@@ -363,21 +451,21 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0 animate-fade-down">
+      <div className="h-12 flex items-center justify-between px-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center shadow-[0_0_12px_rgba(99,102,241,0.3)]">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <div className="w-6 h-6 rounded bg-secondary flex items-center justify-center">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
             </svg>
           </div>
           <div>
-            <span className="text-sm font-semibold">Axi<span className="text-primary">OS</span></span>
-            <p key={activeModel ?? "none"} className="text-[10px] text-muted-foreground animate-scale-in">
+            <span className="text-sm font-medium">Assistant</span>
+            <p key={activeModel ?? "none"} className="text-xs text-muted-foreground max-w-36 truncate">
               {activeModel ?? "System Intelligence"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {/* New Chat button */}
           <button
             onClick={createSession}
@@ -424,15 +512,74 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
             </svg>
           </button>
           {/* Connection status */}
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full glass-subtle">
-            <div className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" : "bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]"}`} />
-            <span className="text-[10px] font-mono text-muted-foreground">{connected ? "live" : "offline"}</span>
+          <div className="flex items-center gap-1.5 px-1.5 py-1">
+            <div className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"}`} />
+            <span className="text-[10px] text-muted-foreground">{connected ? "live" : "offline"}</span>
           </div>
+          <button
+            onClick={onClose}
+            title="Close Chat"
+            aria-label="Close chat"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
+        {contextActions[0] && (
+          <button
+            type="button"
+            onClick={() => handleSend(contextActions[0].prompt)}
+            disabled={!connected || streaming}
+            className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-xs font-medium text-foreground border border-border hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title={contextActions[0].prompt}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="shrink-0">
+              <path d="M12 3v18M3 12h18" />
+              <path d="m5 5 14 14M19 5 5 19" opacity=".35" />
+            </svg>
+            <span className="truncate">{contextActions[0].label}</span>
+          </button>
+        )}
+        <div className="flex items-center p-0.5 rounded-md bg-secondary border border-border" aria-label="Chat layout">
+          {CHAT_MODES.map((item) => {
+            const disabled = item.mode === "docked" && !canDock;
+            return (
+              <button
+                key={item.mode}
+                type="button"
+                onClick={() => onModeChange(item.mode)}
+                disabled={disabled}
+                aria-label={`${item.label} chat`}
+                aria-pressed={mode === item.mode}
+                title={disabled ? "Docking needs a wider window" : `${item.label} chat`}
+                className={`h-6 px-2 rounded-md flex items-center gap-1.5 text-[10px] transition-colors disabled:opacity-25 disabled:cursor-not-allowed ${
+                  mode === item.mode
+                    ? "bg-surface-raised text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                }`}
+              >
+                <ChatModeIcon mode={item.mode} />
+                <span className={mode === "fullscreen" ? "inline" : "hidden min-[520px]:inline"}>{item.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Code Tasks Panel */}
       {tasksOpen && <TasksDrawer />}
+
+      {panelError && (
+        <div role="alert" className="flex items-center justify-between gap-3 border-b border-red-400/20 bg-red-400/[0.08] px-4 py-2 text-xs text-red-300">
+          <span>{panelError}</span>
+          <button type="button" onClick={() => setPanelError(null)} className="text-red-200 hover:text-white" aria-label="Dismiss error">×</button>
+        </div>
+      )}
 
       {/* Session History Panel */}
       {historyOpen && (
@@ -477,28 +624,36 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 scrollbar-none">
         {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center animate-scale-in">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl glass flex items-center justify-center glow-primary">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-                </svg>
+          <div className="flex items-center justify-center h-full px-4">
+            <div className="text-left max-w-sm w-full">
+              <p className="text-sm font-medium text-foreground mb-1">Start with the system</p>
+              <p className="text-xs text-muted-foreground">Use {activeModel ?? "the active model"} to inspect, operate, or build.</p>
+              <div className="divide-y divide-border border-y border-border mt-5">
+                {[...contextActions.slice(0, 1), ...EMPTY_STATE_ACTIONS].map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => handleSend(action.prompt)}
+                    disabled={!connected || streaming}
+                    className="w-full px-1 py-2.5 text-left text-xs text-foreground/75 hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {action.label}
+                  </button>
+                ))}
               </div>
-              <p className="text-sm font-medium text-foreground/70 mb-1">Ask {activeModel ?? "AxiOS"} anything</p>
-              <p className="text-xs text-muted-foreground">System commands, file management, and more</p>
             </div>
           </div>
         )}
         {messages.map((msg) => {
           if (msg.role === "tool_use" || msg.role === "tool_result") {
-            return <div key={msg.id} className="animate-fade-up"><ToolBlock type={msg.role} toolName={msg.toolName ?? "unknown"} content={msg.content} /></div>;
+            return <div key={msg.id}><ToolBlock type={msg.role} toolName={msg.toolName ?? "unknown"} content={msg.content} /></div>;
           }
           if (msg.role === "diff") {
-            return <div key={msg.id} className="animate-fade-up"><DiffBlock files={msg.diffFiles ?? []} /></div>;
+            return <div key={msg.id}><DiffBlock files={msg.diffFiles ?? []} /></div>;
           }
           if (msg.role === "approval_request") {
             return (
-              <div key={msg.id} className="animate-fade-up">
+              <div key={msg.id}>
                 <ApprovalCard
                   toolName={msg.toolName ?? "unknown"}
                   params={msg.content}
@@ -508,13 +663,13 @@ export function ChatPanel({ newChatRef }: ChatPanelProps) {
               </div>
             );
           }
-          return <div key={msg.id} className="animate-fade-up"><MessageBubble role={msg.role} content={msg.content} thinking={msg.thinking} model={msg.model} provider={msg.provider} /></div>;
+          return <div key={msg.id}><MessageBubble role={msg.role} content={msg.content} thinking={msg.thinking} model={msg.model} provider={msg.provider} /></div>;
         })}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div className="animate-fade-up">
+      <div>
         <InputBar
           onSend={handleSend}
           disabled={!connected || streaming}

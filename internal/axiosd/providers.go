@@ -71,6 +71,13 @@ func providerCatalog() []*CloudProvider {
 			Compatible: "openai",
 		},
 		{
+			ID:         "fireworks",
+			Name:       "Fireworks AI",
+			BaseURL:    "https://api.fireworks.ai/inference",
+			Models:     []string{"accounts/fireworks/models/llama-v3p1-70b-instruct", "accounts/fireworks/models/llama-v3p1-8b-instruct"},
+			Compatible: "openai",
+		},
+		{
 			ID:         "openrouter",
 			Name:       "OpenRouter",
 			BaseURL:    "https://openrouter.ai/api",
@@ -586,7 +593,7 @@ func (s *Server) handleProviderActivate(w http.ResponseWriter, r *http.Request) 
 		s.runtime.Rebuild()
 	}
 	s.router.SetCloudAvailable(true)
-	s.router.mode = RouteCloudOnly
+	s.router.SetMode(RouteCloudOnly)
 
 	s.logger.Info("provider activated", "provider", req.Provider, "model", req.Model)
 

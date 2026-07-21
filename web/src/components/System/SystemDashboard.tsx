@@ -1,426 +1,237 @@
-import { useSystemStats } from "@/hooks/useSystemStats";
+import { useMemo } from "react";
+import { useMetricsHistory } from "@/hooks/useMetricsHistory";
+import type { MetricSample } from "@/hooks/useMetricsHistory";
 import type { SystemStats } from "@/types/system";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { AreaChart } from "./charts/AreaChart";
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
+  if (!bytes) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
-  const k = 1024;
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  const value = bytes / Math.pow(k, i);
-  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
-function usageColor(pct: number): string {
-  if (pct < 50) return "#22c55e"; // green-500
-  if (pct < 80) return "#eab308"; // yellow-500
-  return "#ef4444"; // red-500
+function usageClasses(percent: number): { text: string; indicator: string } {
+  if (percent >= 80) return { text: "text-red-400", indicator: "bg-red-400" };
+  if (percent >= 50) return { text: "text-amber-400", indicator: "bg-amber-400" };
+  return { text: "text-emerald-400", indicator: "bg-emerald-400" };
 }
 
-function usageGlow(pct: number): string {
-  const color = usageColor(pct);
-  return `0 0 8px ${color}66, 0 0 20px ${color}33`;
+// Hex equivalents of the usageClasses scale, for the SVG charts.
+function usageHex(percent: number): string {
+  if (percent >= 80) return "#f87171";
+  if (percent >= 50) return "#fbbf24";
+  return "#34d399";
 }
 
-function usageGradient(pct: number): string {
-  if (pct < 50) return "linear-gradient(90deg, #22c55e, #4ade80)";
-  if (pct < 80) return "linear-gradient(90deg, #22c55e, #eab308)";
-  return "linear-gradient(90deg, #eab308, #ef4444)";
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function ProgressBar({ percent }: { percent: number }) {
-  const clamped = Math.min(100, Math.max(0, percent));
-  return (
-    <div
-      style={{
-        width: "100%",
-        height: 10,
-        borderRadius: 6,
-        backgroundColor: "#262626",
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      <div
-        style={{
-          width: `${clamped}%`,
-          height: "100%",
-          borderRadius: 6,
-          background: usageGradient(clamped),
-          boxShadow: usageGlow(clamped),
-          transition: "all 700ms ease",
-        }}
-      />
-    </div>
-  );
-}
-
-function Card({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        backgroundColor: "#171717",
-        border: "1px solid #262626",
-        borderRadius: 12,
-        padding: 24,
-      }}
-    >
-      <h3
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          color: "#a3a3a3",
-          marginTop: 0,
-          marginBottom: 16,
-        }}
-      >
-        {title}
-      </h3>
-      {children}
-    </div>
-  );
-}
+type Series = Array<{ t: number; value: number }>;
 
 function StatRow({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "6px 0",
-      }}
-    >
-      <span style={{ color: "#a3a3a3", fontSize: 13 }}>{label}</span>
-      <span style={{ color: "#e5e5e5", fontSize: 13, fontFamily: "monospace" }}>
-        {value}
-      </span>
+    <div className="flex items-center justify-between gap-4 py-1.5 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono text-xs text-foreground/85 text-right truncate">{value}</span>
     </div>
   );
 }
 
-function SkeletonCard() {
+function UsageBlock({ label = "Usage", percent }: { label?: string; percent: number }) {
+  const colors = usageClasses(percent);
   return (
-    <div
-      style={{
-        backgroundColor: "#171717",
-        border: "1px solid #262626",
-        borderRadius: 12,
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          width: 100,
-          height: 14,
-          borderRadius: 4,
-          backgroundColor: "#262626",
-          marginBottom: 16,
-        }}
-      />
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            style={{
-              width: `${60 + i * 10}%`,
-              height: 12,
-              borderRadius: 4,
-              backgroundColor: "#262626",
-              animation: "pulse 1.5s ease-in-out infinite",
-            }}
-          />
-        ))}
+    <div className="mt-3 pt-3 border-t border-border">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className={`text-xs font-mono font-semibold ${colors.text}`}>{percent.toFixed(1)}%</span>
       </div>
+      <Progress value={percent} indicatorClassName={colors.indicator} />
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Section renderers
-// ---------------------------------------------------------------------------
+function SystemCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
 
 function SystemInfoCard({ stats }: { stats: SystemStats }) {
   return (
-    <Card title="System Info">
+    <SystemCard title="System" description="Host identity and runtime">
       <StatRow label="Hostname" value={stats.hostname} />
-      <StatRow label="OS" value={`${stats.os} / ${stats.arch}`} />
+      <StatRow label="Operating system" value={`${stats.os} / ${stats.arch}`} />
       <StatRow label="Kernel" value={stats.kernel} />
       <StatRow label="Uptime" value={stats.uptime} />
-    </Card>
+    </SystemCard>
   );
 }
 
-function CPUCard({ stats }: { stats: SystemStats }) {
-  const { cpu } = stats;
+function CPUCard({ stats, series }: { stats: SystemStats; series: Series }) {
   return (
-    <Card title="CPU">
-      <StatRow label="Model" value={cpu.model} />
-      <StatRow label="Cores / Threads" value={`${cpu.cores} / ${cpu.threads}`} />
-      <div style={{ marginTop: 12, marginBottom: 6 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: 6,
-          }}
-        >
-          <span style={{ color: "#a3a3a3", fontSize: 13 }}>Usage</span>
-          <span
-            style={{
-              color: usageColor(cpu.usage_percent),
-              fontSize: 13,
-              fontFamily: "monospace",
-              fontWeight: 600,
-            }}
-          >
-            {cpu.usage_percent.toFixed(1)}%
-          </span>
-        </div>
-        <ProgressBar percent={cpu.usage_percent} />
+    <SystemCard title="Processor" description={stats.cpu.model}>
+      <StatRow label="Physical cores" value={String(stats.cpu.cores)} />
+      <StatRow label="Logical threads" value={String(stats.cpu.threads)} />
+      <UsageBlock percent={stats.cpu.usage_percent} />
+      <div className="mt-3">
+        <AreaChart samples={series} color={usageHex(stats.cpu.usage_percent)} height={110} />
       </div>
-    </Card>
+    </SystemCard>
   );
 }
 
-function MemoryCard({ stats }: { stats: SystemStats }) {
-  const { memory } = stats;
+function MemoryCard({ stats, series }: { stats: SystemStats; series: Series }) {
   return (
-    <Card title="Memory">
-      <StatRow label="Total" value={formatBytes(memory.total_bytes)} />
-      <StatRow label="Used" value={formatBytes(memory.used_bytes)} />
-      <StatRow label="Available" value={formatBytes(memory.available_bytes)} />
-      <div style={{ marginTop: 12, marginBottom: 6 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: 6,
-          }}
-        >
-          <span style={{ color: "#a3a3a3", fontSize: 13 }}>Usage</span>
-          <span
-            style={{
-              color: usageColor(memory.usage_percent),
-              fontSize: 13,
-              fontFamily: "monospace",
-              fontWeight: 600,
-            }}
-          >
-            {memory.usage_percent.toFixed(1)}%
-          </span>
-        </div>
-        <ProgressBar percent={memory.usage_percent} />
+    <SystemCard title="Memory" description={`${formatBytes(stats.memory.available_bytes)} available`}>
+      <StatRow label="Total" value={formatBytes(stats.memory.total_bytes)} />
+      <StatRow label="Used" value={formatBytes(stats.memory.used_bytes)} />
+      <StatRow label="Available" value={formatBytes(stats.memory.available_bytes)} />
+      <UsageBlock percent={stats.memory.usage_percent} />
+      <div className="mt-3">
+        <AreaChart samples={series} color={usageHex(stats.memory.usage_percent)} height={110} />
       </div>
-    </Card>
+    </SystemCard>
+  );
+}
+
+function GPUCards({ stats, history }: { stats: SystemStats; history: MetricSample[] }) {
+  if (!stats.gpu?.length) {
+    return (
+      <SystemCard title="GPU" description="Hardware acceleration">
+        <p className="text-sm text-muted-foreground">No NVIDIA GPU telemetry is available.</p>
+      </SystemCard>
+    );
+  }
+  return (
+    <>
+      {stats.gpu.map((gpu, i) => {
+        const series = history.map((s) => ({ t: s.t, value: s.gpus[i]?.util ?? 0 }));
+        return (
+          <SystemCard key={gpu.index} title={`GPU ${gpu.index}`} description={gpu.name}>
+            <StatRow label="Temperature" value={`${gpu.temperature_c.toFixed(0)}°C`} />
+            <StatRow label="VRAM used" value={`${formatBytes(gpu.memory_used_bytes)} / ${formatBytes(gpu.memory_total_bytes)}`} />
+            <UsageBlock label="Compute" percent={gpu.utilization_percent} />
+            <UsageBlock label="VRAM" percent={gpu.memory_usage_percent} />
+            <div className="mt-3">
+              <AreaChart samples={series} color={usageHex(gpu.utilization_percent)} height={90} />
+            </div>
+          </SystemCard>
+        );
+      })}
+    </>
   );
 }
 
 function DiskCards({ stats }: { stats: SystemStats }) {
-  if (!stats.disk || stats.disk.length === 0) {
+  if (!stats.disk.length) {
     return (
-      <Card title="Disk">
-        <span style={{ color: "#737373", fontSize: 13 }}>
-          No disk information available
-        </span>
-      </Card>
+      <SystemCard title="Storage">
+        <p className="text-sm text-muted-foreground">No disk information is available.</p>
+      </SystemCard>
     );
   }
-
   return (
     <>
-      {stats.disk.map((d) => (
-        <Card key={d.mount} title={`Disk ${d.mount}`}>
-          <StatRow label="Device" value={d.device} />
-          <StatRow label="Total" value={formatBytes(d.total_bytes)} />
-          <StatRow label="Used" value={formatBytes(d.used_bytes)} />
-          <StatRow label="Available" value={formatBytes(d.available_bytes)} />
-          <div style={{ marginTop: 12, marginBottom: 6 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 6,
-              }}
-            >
-              <span style={{ color: "#a3a3a3", fontSize: 13 }}>Usage</span>
-              <span
-                style={{
-                  color: usageColor(d.usage_percent),
-                  fontSize: 13,
-                  fontFamily: "monospace",
-                  fontWeight: 600,
-                }}
-              >
-                {d.usage_percent.toFixed(1)}%
-              </span>
-            </div>
-            <ProgressBar percent={d.usage_percent} />
-          </div>
-        </Card>
+      {stats.disk.map((disk) => (
+        <SystemCard key={disk.mount} title={`Storage · ${disk.mount}`} description={disk.device}>
+          <StatRow label="Total" value={formatBytes(disk.total_bytes)} />
+          <StatRow label="Used" value={formatBytes(disk.used_bytes)} />
+          <StatRow label="Available" value={formatBytes(disk.available_bytes)} />
+          <UsageBlock percent={disk.usage_percent} />
+        </SystemCard>
       ))}
     </>
   );
 }
 
 function NetworkCard({ stats }: { stats: SystemStats }) {
-  const ifaces = stats.network.interfaces ?? [];
   return (
-    <Card title="Network">
-      {ifaces.length === 0 ? (
-        <span style={{ color: "#737373", fontSize: 13 }}>
-          No interfaces found
-        </span>
+    <SystemCard title="Network" description="Available interfaces">
+      {stats.network.interfaces.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No interfaces found.</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {ifaces.map((iface) => (
-            <div
-              key={iface.name}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "8px 12px",
-                backgroundColor: "#0a0a0a",
-                borderRadius: 8,
-                border: "1px solid #1a1a1a",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    backgroundColor:
-                      iface.status === "up" ? "#22c55e" : "#ef4444",
-                    boxShadow:
-                      iface.status === "up"
-                        ? "0 0 6px #22c55e88"
-                        : "0 0 6px #ef444488",
-                  }}
-                />
-                <span
-                  style={{
-                    color: "#e5e5e5",
-                    fontSize: 13,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {iface.name}
-                </span>
+        <div className="space-y-2">
+          {stats.network.interfaces.map((networkInterface) => (
+            <div key={networkInterface.name} className="surface-raised rounded-lg flex items-center justify-between gap-3 px-3 py-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-2 h-2 rounded-full ${networkInterface.status === "up" ? "bg-emerald-400" : "bg-red-400"}`} />
+                <span className="text-sm font-medium truncate">{networkInterface.name}</span>
               </div>
-              <span
-                style={{
-                  color: "#a3a3a3",
-                  fontSize: 13,
-                  fontFamily: "monospace",
-                }}
-              >
-                {iface.ip || "no address"}
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-mono text-muted-foreground">{networkInterface.ip || "no address"}</span>
+                <Badge variant={networkInterface.status === "up" ? "secondary" : "destructive"}>{networkInterface.status}</Badge>
+              </div>
             </div>
           ))}
         </div>
       )}
+    </SystemCard>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <Card className="h-48 animate-pulse">
+      <CardHeader>
+        <div className="h-4 w-28 rounded bg-secondary" />
+        <div className="h-3 w-40 rounded bg-secondary" />
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="h-3 w-full rounded bg-secondary" />
+        <div className="h-3 w-4/5 rounded bg-secondary" />
+        <div className="h-3 w-3/5 rounded bg-secondary" />
+      </CardContent>
     </Card>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main dashboard
-// ---------------------------------------------------------------------------
-
 export function SystemDashboard() {
-  const { stats, loading, error } = useSystemStats(5000);
+  const { stats, telemetry, isRemote, loading, error, history } = useMetricsHistory(1000);
+
+  const cpuSeries = useMemo(() => history.map((s) => ({ t: s.t, value: s.cpu })), [history]);
+  const memSeries = useMemo(() => history.map((s) => ({ t: s.t, value: s.mem })), [history]);
 
   return (
-    <div
-      style={{
-        backgroundColor: "#0a0a0a",
-        minHeight: "100%",
-        padding: 24,
-        color: "#e5e5e5",
-        fontFamily:
-          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      }}
-    >
-      <style>
-        {`@keyframes pulse {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 0.8; }
-        }`}
-      </style>
-
-      <h2
-        className="animate-fade-up"
-        style={{
-          fontSize: 20,
-          fontWeight: 600,
-          marginTop: 0,
-          marginBottom: 24,
-          color: "#f5f5f5",
-        }}
-      >
-        System Dashboard
-      </h2>
-
-      {error && (
-        <div
-          style={{
-            padding: "12px 16px",
-            marginBottom: 16,
-            backgroundColor: "#1c0a0a",
-            border: "1px solid #7f1d1d",
-            borderRadius: 8,
-            color: "#fca5a5",
-            fontSize: 13,
-          }}
-        >
-          Failed to load system stats: {error}
+    <div className="min-h-full bg-workspace p-5 md:p-6">
+      <div className="mb-5 animate-fade-up">
+        <p className="text-xs uppercase tracking-[0.16em] text-primary mb-1">Telemetry</p>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold tracking-tight">{telemetry?.host.name ?? "System Details"}</h2>
+          {isRemote && <Badge variant="default">Remote</Badge>}
         </div>
-      )}
-
-      {loading && !stats ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
-            gap: 16,
-          }}
-        >
-          {[1, 2, 3, 4].map((i) => (
-            <SkeletonCard key={i} />
+        <p className="text-sm text-muted-foreground mt-1">
+          {telemetry ? `${telemetry.host.host}:${telemetry.host.port} · ${telemetry.latency_ms} ms · ${telemetry.source} telemetry` : "Live hardware, storage, and network information."}
+        </p>
+      </div>
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-400/25 bg-red-400/[0.08] px-4 py-3 text-sm text-red-300">
+          {error}
+          {telemetry?.running_models.map((model) => (
+            <span key={model.name} className="block mt-1 text-xs text-muted-foreground">
+              Running {model.name} · {formatBytes(model.vram_bytes)} VRAM allocated
+            </span>
           ))}
         </div>
+      )}
+      {loading && !stats ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((item) => <SkeletonCard key={item} />)}
+        </div>
       ) : stats ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
-            gap: 16,
-          }}
-        >
+        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
           <div className="animate-fade-up delay-100"><SystemInfoCard stats={stats} /></div>
-          <div className="animate-fade-up delay-200"><CPUCard stats={stats} /></div>
-          <div className="animate-fade-up delay-300"><MemoryCard stats={stats} /></div>
+          <div className="animate-fade-up delay-200"><CPUCard stats={stats} series={cpuSeries} /></div>
+          <div className="animate-fade-up delay-300"><MemoryCard stats={stats} series={memSeries} /></div>
           <div className="animate-fade-up delay-400"><NetworkCard stats={stats} /></div>
-          <div className="animate-fade-up delay-500"><DiskCards stats={stats} /></div>
+          <GPUCards stats={stats} history={history} />
+          <DiskCards stats={stats} />
         </div>
       ) : null}
     </div>

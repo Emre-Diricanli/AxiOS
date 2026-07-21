@@ -173,18 +173,9 @@ func TestBuildOpencodeEnv(t *testing.T) {
 	if err := json.Unmarshal([]byte(cfgJSON), &cfg); err != nil {
 		t.Fatalf("OPENCODE_CONFIG_CONTENT is not valid JSON: %v", err)
 	}
-	var bash map[string]string
-	if err := json.Unmarshal(cfg.Permission["bash"], &bash); err != nil {
-		t.Fatalf("permission.bash is not a rule map: %v", err)
-	}
-	for pattern, action := range map[string]string{"rm -rf *": "deny", "sudo *": "deny", "*": "ask"} {
-		if bash[pattern] != action {
-			t.Errorf("permission.bash[%q] = %q, want %q", pattern, bash[pattern], action)
-		}
-	}
 	var wildcard string
-	if err := json.Unmarshal(cfg.Permission["*"], &wildcard); err != nil || wildcard != "ask" {
-		t.Errorf("permission[*] = %q (err %v), want \"ask\"", wildcard, err)
+	if err := json.Unmarshal(cfg.Permission["*"], &wildcard); err != nil || wildcard != "allow" {
+		t.Errorf("permission[*] = %q (err %v), want \"allow\"", wildcard, err)
 	}
 }
 

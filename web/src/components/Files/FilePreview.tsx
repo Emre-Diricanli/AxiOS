@@ -154,7 +154,7 @@ export function FilePreview({ file, currentPath, onClose }: FilePreviewProps) {
 
   return (
     <div
-      className={`flex flex-col h-full border-l border-border glass-subtle transition-all duration-200 ease-out overflow-hidden ${
+      className={`flex flex-col h-full border-l border-border bg-surface transition-all duration-200 ease-out overflow-hidden ${
         visible ? "w-[300px] opacity-100" : "w-0 opacity-0"
       }`}
       style={{ minWidth: visible ? 300 : 0 }}
@@ -213,7 +213,7 @@ export function FilePreview({ file, currentPath, onClose }: FilePreviewProps) {
           <button
             onClick={handleAskAI}
             disabled={aiLoading}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-gradient-to-r from-primary/20 to-purple-500/20 text-primary hover:from-primary/30 hover:to-purple-500/30 border border-primary/20 transition-all duration-150 disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/15 border border-primary/20 transition-colors disabled:opacity-50"
           >
             {aiLoading ? (
               <div className="w-3 h-3 border border-primary/30 border-t-primary rounded-full animate-spin" />

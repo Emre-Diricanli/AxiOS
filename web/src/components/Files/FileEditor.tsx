@@ -271,11 +271,11 @@ function AIPanel({ viewRef, fileName, onClose }: AIPanelProps) {
   }, [response]);
 
   return (
-    <div className="flex flex-col h-full w-[350px] border-l border-border glass-subtle shrink-0">
+    <div className="flex flex-col h-full w-[350px] border-l border-border bg-surface shrink-0">
       {/* Header */}
       <div className="flex items-center justify-between px-3 h-10 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center">
+          <div className="w-5 h-5 rounded bg-primary flex items-center justify-center">
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M8 1v14M1 8h14M3 3l10 10M13 3L3 13" />
             </svg>
@@ -407,7 +407,7 @@ function AIPanel({ viewRef, fileName, onClose }: AIPanelProps) {
 
         {!loading && !response && !aiError && (
           <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-            <div className="w-10 h-10 rounded-xl glass flex items-center justify-center mb-3 glow-primary">
+            <div className="w-10 h-10 rounded-xl surface-raised flex items-center justify-center mb-3">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                 <path d="M8 1v14M1 8h14M3 3l10 10M13 3L3 13" />
               </svg>
@@ -601,7 +601,7 @@ export function FileEditor({ filePath, fileName, onClose }: FileEditorProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header bar */}
-      <div className="flex items-center gap-2 px-3 h-10 border-b border-border glass-subtle shrink-0">
+      <div className="flex items-center gap-2 px-3 h-10 border-b border-border bg-surface-raised shrink-0">
         {/* Back button */}
         <button
           onClick={handleClose}

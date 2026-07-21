@@ -75,6 +75,13 @@ const icons = {
       <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
     </svg>
   ),
+  notes: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <path d="M8 13h8M8 17h6" />
+    </svg>
+  ),
   terminal: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 17l6-5-6-5M12 19h8" />
@@ -221,6 +228,14 @@ export function CommandPalette({
         action: () => { onNavigate("terminal"); onClose(); },
       },
       {
+        id: "nav-notes",
+        title: "Notes",
+        description: "Browse and search your Obsidian vault",
+        category: "Navigation",
+        icon: icons.notes,
+        action: () => { onNavigate("notes"); onClose(); },
+      },
+      {
         id: "nav-system",
         title: "System",
         description: "Hardware and performance metrics",
@@ -272,30 +287,6 @@ export function CommandPalette({
         category: "Actions",
         icon: icons.chat,
         action: () => { onToggleChat(); onClose(); },
-      },
-      {
-        id: "act-new-file",
-        title: "New File",
-        description: "Create a new file (coming soon)",
-        category: "Actions",
-        icon: icons.newFile,
-        action: () => { onClose(); },
-      },
-      {
-        id: "act-new-folder",
-        title: "New Folder",
-        description: "Create a new folder (coming soon)",
-        category: "Actions",
-        icon: icons.newFolder,
-        action: () => { onClose(); },
-      },
-      {
-        id: "act-upload",
-        title: "Upload Files",
-        description: "Upload files to the server (coming soon)",
-        category: "Actions",
-        icon: icons.upload,
-        action: () => { onClose(); },
       },
       // AI Quick Prompts
       {
@@ -432,11 +423,11 @@ export function CommandPalette({
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 overlay-backdrop" />
 
       {/* Panel */}
       <div
-        className="relative w-full max-w-lg mx-4 rounded-2xl shadow-2xl glass border border-glass-border overflow-hidden animate-in zoom-in-95 fade-in duration-150"
+        className="relative w-full max-w-lg mx-4 rounded-lg shadow-2xl bg-surface border border-border overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >

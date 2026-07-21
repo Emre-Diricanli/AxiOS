@@ -37,7 +37,7 @@ export function DiffBlock({ files }: { files: DiffFile[] }) {
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[90%] w-full rounded-xl glass-subtle border border-border/60 overflow-hidden">
+      <div className="max-w-[90%] w-full rounded-xl surface-raised overflow-hidden">
         <button
           onClick={() => setOpen(!open)}
           className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-accent/40 transition-colors"

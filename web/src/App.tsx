@@ -2,10 +2,14 @@ import { useState, useEffect } from "react";
 import { Shell } from "@/components/Layout/Shell";
 import { SetupWizard } from "@/components/Setup/SetupWizard";
 import { ToastContainer } from "@/components/Layout/ToastContainer";
+import { AxiosMark } from "@/components/brand/AxiosLogo";
+import { AuthGate } from "@/components/Auth/AuthGate";
+import { ModelDownloadProvider } from "@/contexts/ModelDownloadContext";
+import { ModelDownloadWidget } from "@/components/Layout/ModelDownloadWidget";
 
 type SetupState = "loading" | "setup" | "ready";
 
-export default function App() {
+function AuthenticatedApp() {
   const [state, setState] = useState<SetupState>("loading");
 
   useEffect(() => {
@@ -36,9 +40,9 @@ export default function App() {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <div className="relative w-10 h-10">
-            <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
+          <div className="relative">
+            <div className="absolute -inset-2 rounded-2xl border border-primary/20 animate-pulse" />
+            <AxiosMark className="w-12 h-12 rounded-xl shadow-[0_0_32px_rgba(120,144,248,0.25)]" />
           </div>
           <p className="text-xs text-muted-foreground">Starting AxiOS...</p>
         </div>
@@ -57,8 +61,19 @@ export default function App() {
 
   return (
     <>
-      <Shell />
+      <ModelDownloadProvider>
+        <Shell />
+        <ModelDownloadWidget />
+      </ModelDownloadProvider>
       <ToastContainer />
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthGate>
+      <AuthenticatedApp />
+    </AuthGate>
   );
 }

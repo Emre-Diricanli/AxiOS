@@ -3,6 +3,8 @@ export interface OllamaHost {
   name: string;
   host: string;
   port: number;
+  telemetry_port: number;
+  has_telemetry_token: boolean;
   status: "online" | "offline" | "checking";
   models: string[];
   active: boolean;
