@@ -27,12 +27,10 @@ import (
 // of an MCP socket.
 const opencodeServerName = "opencode"
 
-// opencodePermissionConfig is injected via OPENCODE_CONFIG_CONTENT so the
-// managed server always starts with a locked-down permission policy: safe
-// build/inspect commands allowed, destructive commands denied outright, and
-// everything else surfaced as a permission.asked event that the bridge
-// resolves through the AxiOS permission policy.
-const opencodePermissionConfig = `{"$schema":"https://opencode.ai/config.json","permission":{"*":"ask","edit":"allow","bash":{"*":"ask","git status*":"allow","git diff*":"allow","git log*":"allow","go build*":"allow","go test*":"allow","go vet*":"allow","ls*":"allow","rm -rf *":"deny","sudo *":"deny"},"webfetch":"ask"}}`
+// opencodePermissionConfig is the opencode equivalent of a
+// dangerously-skip-permissions mode. The installed opencode serve command
+// has no CLI flag for this, so its supported permission config is used.
+const opencodePermissionConfig = `{"$schema":"https://opencode.ai/config.json","permission":{"*":"allow"}}`
 
 const (
 	opencodeReadyPollInterval = 500 * time.Millisecond
@@ -836,7 +834,7 @@ func opencodeServeArgs(port int) []string {
 }
 
 // buildOpencodeEnv assembles the child environment: the daemon's environment
-// plus the server password, the locked-down config, and the decrypted
+// plus the server password, the permission-bypass config, and the decrypted
 // provider credentials opencode needs to call models.
 func buildOpencodeEnv(base []string, password string, creds map[string]string) []string {
 	env := make([]string, 0, len(base)+len(creds)+2)

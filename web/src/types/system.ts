@@ -24,6 +24,15 @@ export interface SystemStats {
     available_bytes: number;
     usage_percent: number;
   }>;
+  gpu: Array<{
+    index: number;
+    name: string;
+    utilization_percent: number;
+    memory_total_bytes: number;
+    memory_used_bytes: number;
+    memory_usage_percent: number;
+    temperature_c: number;
+  }>;
   network: {
     hostname: string;
     interfaces: Array<{
@@ -32,4 +41,10 @@ export interface SystemStats {
       status: string;
     }>;
   };
+}
+
+export interface RunningModelStats {
+  name: string;
+  size_bytes: number;
+  vram_bytes: number;
 }

@@ -1,6 +1,7 @@
 package axiosd
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,18 +9,23 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/axios-os/axios/pkg/secrets"
 )
 
 // OllamaHost represents a remote or local machine running the Ollama server.
 type OllamaHost struct {
-	ID      string   `json:"id"`       // unique identifier (slug from name)
-	Name    string   `json:"name"`     // display name, e.g., "Jetson Nano", "Mac Studio"
-	Host    string   `json:"host"`     // hostname or IP
-	Port    int      `json:"port"`     // default 11434
-	Status  string   `json:"status"`   // "online", "offline", "checking"
-	Models  []string `json:"models"`   // list of model names available on this host
-	Active  bool     `json:"active"`   // is this the currently selected host
-	GPUInfo string   `json:"gpu_info"` // GPU description if available
+	ID                string   `json:"id"`             // unique identifier (slug from name)
+	Name              string   `json:"name"`           // display name, e.g., "Jetson Nano", "Mac Studio"
+	Host              string   `json:"host"`           // hostname or IP
+	Port              int      `json:"port"`           // Ollama port, default 11434
+	TelemetryPort     int      `json:"telemetry_port"` // AxiOS daemon port, default 3000
+	Status            string   `json:"status"`         // "online", "offline", "checking"
+	Models            []string `json:"models"`         // list of model names available on this host
+	Active            bool     `json:"active"`         // is this the currently selected host
+	GPUInfo           string   `json:"gpu_info"`       // GPU description if available
+	TelemetryToken    string   `json:"-"`
+	HasTelemetryToken bool     `json:"has_telemetry_token"`
 }
 
 // HostStore manages a collection of Ollama host connections.
@@ -28,6 +34,8 @@ type HostStore struct {
 	activeID string
 	mu       sync.RWMutex
 	onSwitch func(client *OllamaClient) // called when active host changes
+	filePath string
+	secrets  *secrets.Store
 }
 
 // NewHostStore creates a new host store with a callback for when the active host switches.
@@ -37,6 +45,13 @@ func NewHostStore(onSwitch func(client *OllamaClient)) *HostStore {
 		hosts:    make(map[string]*OllamaHost),
 		onSwitch: onSwitch,
 	}
+}
+
+func (hs *HostStore) ConfigurePersistence(path string, secretStore *secrets.Store) {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	hs.filePath = path
+	hs.secrets = secretStore
 }
 
 // slugify converts a display name into a URL-friendly identifier.
@@ -78,11 +93,12 @@ func (hs *HostStore) AddHost(name, host string, port int) (*OllamaHost, error) {
 	hs.mu.Unlock()
 
 	h := &OllamaHost{
-		ID:     id,
-		Name:   name,
-		Host:   host,
-		Port:   port,
-		Status: "checking",
+		ID:            id,
+		Name:          name,
+		Host:          host,
+		Port:          port,
+		TelemetryPort: 3000,
+		Status:        "checking",
 	}
 
 	// Probe the host
@@ -122,6 +138,36 @@ func (hs *HostStore) RemoveHost(id string) error {
 	}
 
 	delete(hs.hosts, id)
+	return nil
+}
+
+func (hs *HostStore) SetTelemetryPort(id string, port int) error {
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("telemetry port must be between 1 and 65535")
+	}
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	host, exists := hs.hosts[id]
+	if !exists {
+		return fmt.Errorf("host %q not found", id)
+	}
+	host.TelemetryPort = port
+	return nil
+}
+
+func (hs *HostStore) SetTelemetryToken(id, token string) error {
+	token = strings.TrimSpace(token)
+	if token != "" && len(token) < 32 {
+		return fmt.Errorf("telemetry token must contain at least 32 characters")
+	}
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	host, exists := hs.hosts[id]
+	if !exists {
+		return fmt.Errorf("host %q not found", id)
+	}
+	host.TelemetryToken = token
+	host.HasTelemetryToken = host.TelemetryToken != ""
 	return nil
 }
 
@@ -237,12 +283,25 @@ func (hs *HostStore) GetActive() *OllamaHost {
 	return &copy
 }
 
+func (hs *HostStore) GetHost(id string) *OllamaHost {
+	hs.mu.RLock()
+	defer hs.mu.RUnlock()
+	host, exists := hs.hosts[id]
+	if !exists {
+		return nil
+	}
+	copy := *host
+	copy.Active = host.ID == hs.activeID
+	return &copy
+}
+
 // --- Persistence ---
 
 // hostsFile is the JSON structure saved to disk.
 type hostsFile struct {
-	Hosts    []*OllamaHost `json:"hosts"`
-	ActiveID string        `json:"active_id"`
+	Hosts           []*OllamaHost     `json:"hosts"`
+	ActiveID        string            `json:"active_id"`
+	TelemetryTokens map[string]string `json:"telemetry_tokens,omitempty"`
 }
 
 // SaveToFile persists the host list to a JSON file.
@@ -251,28 +310,56 @@ func (hs *HostStore) SaveToFile(path string) error {
 	defer hs.mu.RUnlock()
 
 	data := hostsFile{
-		Hosts:    make([]*OllamaHost, 0, len(hs.hosts)),
-		ActiveID: hs.activeID,
+		Hosts:           make([]*OllamaHost, 0, len(hs.hosts)),
+		ActiveID:        hs.activeID,
+		TelemetryTokens: make(map[string]string),
 	}
 	for _, h := range hs.hosts {
 		copy := *h
+		copy.TelemetryToken = ""
 		copy.Active = (h.ID == hs.activeID)
 		data.Hosts = append(data.Hosts, &copy)
+		if h.TelemetryToken != "" {
+			if hs.secrets == nil {
+				return fmt.Errorf("cannot persist telemetry token without an encrypted secrets store")
+			}
+			encrypted, err := hs.secrets.Encrypt([]byte(h.TelemetryToken))
+			if err != nil {
+				return fmt.Errorf("encrypt telemetry token for %s: %w", h.ID, err)
+			}
+			data.TelemetryTokens[h.ID] = encrypted
+		}
 	}
 
 	raw, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal hosts: %w", err)
 	}
-	if err := os.WriteFile(path, raw, 0644); err != nil {
+	if err := os.WriteFile(path, raw, 0600); err != nil {
 		return fmt.Errorf("write hosts file: %w", err)
 	}
+	if err := os.Chmod(path, 0600); err != nil {
+		return fmt.Errorf("secure hosts file: %w", err)
+	}
 	return nil
+}
+
+func (hs *HostStore) Save() error {
+	hs.mu.RLock()
+	path := hs.filePath
+	hs.mu.RUnlock()
+	if path == "" {
+		return nil
+	}
+	return hs.SaveToFile(path)
 }
 
 // LoadFromFile loads the host list from a JSON file.
 // Hosts loaded from file are re-probed for current status.
 func (hs *HostStore) LoadFromFile(path string) error {
+	hs.mu.Lock()
+	hs.filePath = path
+	hs.mu.Unlock()
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -284,6 +371,31 @@ func (hs *HostStore) LoadFromFile(path string) error {
 	var data hostsFile
 	if err := json.Unmarshal(raw, &data); err != nil {
 		return fmt.Errorf("parse hosts file: %w", err)
+	}
+	for _, host := range data.Hosts {
+		stored := data.TelemetryTokens[host.ID]
+		if stored == "" {
+			continue
+		}
+		var token []byte
+		if secrets.IsEncrypted(stored) {
+			if hs.secrets == nil {
+				continue
+			}
+			decrypted, err := hs.secrets.Decrypt(stored)
+			if err != nil {
+				continue
+			}
+			token = decrypted
+		} else {
+			decoded, err := base64.StdEncoding.DecodeString(stored)
+			if err != nil {
+				continue
+			}
+			token = decoded
+		}
+		host.TelemetryToken = string(token)
+		host.HasTelemetryToken = host.TelemetryToken != ""
 	}
 
 	hs.mu.Lock()
@@ -337,9 +449,43 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		s.handleHostsAdd(w, r)
 	case http.MethodDelete:
 		s.handleHostsRemove(w, r)
+	case http.MethodPatch:
+		s.handleHostsUpdate(w, r)
 	default:
 		s.jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleHostsUpdate(w http.ResponseWriter, r *http.Request) {
+	if s.hostStore == nil {
+		s.jsonError(w, "host management not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	var req struct {
+		ID             string  `json:"id"`
+		TelemetryPort  int     `json:"telemetry_port"`
+		TelemetryToken *string `json:"telemetry_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.jsonError(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.hostStore.SetTelemetryPort(req.ID, req.TelemetryPort); err != nil {
+		s.jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.TelemetryToken != nil {
+		if err := s.hostStore.SetTelemetryToken(req.ID, *req.TelemetryToken); err != nil {
+			s.jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if err := s.hostStore.Save(); err != nil {
+		s.jsonError(w, "failed to save host configuration", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "host": s.hostStore.GetHosts()})
 }
 
 func (s *Server) handleHostsList(w http.ResponseWriter, r *http.Request) {
@@ -363,18 +509,40 @@ func (s *Server) handleHostsAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name string `json:"name"`
-		Host string `json:"host"`
-		Port int    `json:"port"`
+		Name           string `json:"name"`
+		Host           string `json:"host"`
+		Port           int    `json:"port"`
+		TelemetryPort  int    `json:"telemetry_port"`
+		TelemetryToken string `json:"telemetry_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.jsonError(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.TelemetryPort < 0 || req.TelemetryPort > 65535 {
+		s.jsonError(w, "telemetry port must be between 1 and 65535", http.StatusBadRequest)
 		return
 	}
 
 	host, err := s.hostStore.AddHost(req.Name, req.Host, req.Port)
 	if err != nil {
 		s.jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.TelemetryPort > 0 {
+		if err := s.hostStore.SetTelemetryPort(host.ID, req.TelemetryPort); err != nil {
+			s.jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if req.TelemetryToken != "" {
+		if err := s.hostStore.SetTelemetryToken(host.ID, req.TelemetryToken); err != nil {
+			s.jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if err := s.hostStore.Save(); err != nil {
+		s.jsonError(w, "failed to save host configuration", http.StatusInternalServerError)
 		return
 	}
 
@@ -399,6 +567,10 @@ func (s *Server) handleHostsRemove(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.hostStore.RemoveHost(id); err != nil {
 		s.jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.hostStore.Save(); err != nil {
+		s.jsonError(w, "failed to save host configuration", http.StatusInternalServerError)
 		return
 	}
 
@@ -427,6 +599,10 @@ func (s *Server) handleHostAction(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.hostStore.SetActive(id); err != nil {
 		s.jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.hostStore.Save(); err != nil {
+		s.jsonError(w, "failed to save host configuration", http.StatusInternalServerError)
 		return
 	}
 

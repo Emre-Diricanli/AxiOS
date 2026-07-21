@@ -51,16 +51,18 @@ type fakeStep struct {
 // fakeProvider implements chatClient with a scripted sequence of steps.
 // The last step repeats once the script is exhausted.
 type fakeProvider struct {
-	name  string
-	model string
-	steps []fakeStep
-	calls int
+	name       string
+	model      string
+	steps      []fakeStep
+	calls      int
+	toolCounts []int
 }
 
 func (f *fakeProvider) Name() string  { return f.name }
 func (f *fakeProvider) Model() string { return f.model }
 
 func (f *fakeProvider) Stream(ctx context.Context, system string, msgs []providers.Message, tools []providers.ToolDef, onDelta func(string)) (*providers.NormalizedResponse, error) {
+	f.toolCounts = append(f.toolCounts, len(tools))
 	idx := f.calls
 	if idx >= len(f.steps) {
 		idx = len(f.steps) - 1
@@ -76,6 +78,51 @@ func (f *fakeProvider) Stream(ctx context.Context, system string, msgs []provide
 		}
 	}
 	return step.resp, nil
+}
+
+func TestChatLoopRetriesOllamaWithoutToolsWhenUnsupported(t *testing.T) {
+	unsupported := &providers.ClassifiedError{
+		Reason:     providers.ReasonUnknown,
+		StatusCode: 400,
+		Provider:   "ollama",
+		Model:      "hf.co/acme/model:Q4_K_M",
+		Message:    "hf.co/acme/model:Q4_K_M does not support tools",
+	}
+	fake := &fakeProvider{
+		name:  "ollama",
+		model: "hf.co/acme/model:Q4_K_M",
+		steps: []fakeStep{
+			{err: unsupported},
+			{resp: &providers.NormalizedResponse{Content: "chat-only reply", FinishReason: providers.FinishStop}},
+		},
+	}
+	loop := newTestLoop(fake)
+	loop.tools = []providers.ToolDef{{Name: "axios-system__system_info"}}
+	loop.execTool = func(string, string, json.RawMessage) string { return "" }
+	markedUnsupported := false
+	loop.onToolsUnsupported = func(provider, model string) {
+		markedUnsupported = provider == "ollama" && model == "hf.co/acme/model:Q4_K_M"
+	}
+
+	sink := &fakeSink{}
+	loop.run(context.Background(), sink, userSession(t, "hello"))
+
+	if fake.calls != 2 {
+		t.Fatalf("provider calls = %d, want 2", fake.calls)
+	}
+	if len(fake.toolCounts) != 2 || fake.toolCounts[0] != 1 || fake.toolCounts[1] != 0 {
+		t.Fatalf("tool counts = %v, want [1 0]", fake.toolCounts)
+	}
+	if !markedUnsupported {
+		t.Fatal("unsupported tool capability was not recorded")
+	}
+	assistants := sink.byType("assistant")
+	if len(assistants) != 1 || assistants[0].Content != "chat-only reply" {
+		t.Fatalf("assistant messages = %+v, want chat-only reply", assistants)
+	}
+	if got := len(sink.byType("error")); got != 0 {
+		t.Fatalf("unexpected error messages: %+v", sink.byType("error"))
+	}
 }
 
 func testLogger() *slog.Logger {

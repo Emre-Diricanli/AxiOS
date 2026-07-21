@@ -7,9 +7,9 @@ import { toastSuccess, toastInfo, toastError } from "@/hooks/useToast";
 
 function StatusDot({ status }: { status: OllamaHost["status"] }) {
   const colors = {
-    online: "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]",
-    offline: "bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]",
-    checking: "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)] animate-pulse",
+    online: "bg-green-400",
+    offline: "bg-red-400",
+    checking: "bg-yellow-400 animate-pulse",
   };
 
   return <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${colors[status]}`} />;
@@ -21,13 +21,19 @@ function HostCard({
   host,
   onActivate,
   onRemove,
+  onTelemetryChange,
 }: {
   host: OllamaHost;
   onActivate: () => void;
   onRemove: () => void;
+  onTelemetryChange: (port: number, token?: string) => Promise<void>;
 }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [editingTelemetry, setEditingTelemetry] = useState(false);
+  const [telemetryPort, setTelemetryPort] = useState(String(host.telemetry_port || 3000));
+  const [telemetryToken, setTelemetryToken] = useState("");
   const isOffline = host.status === "offline";
+  const isLocal = host.id === "local";
 
   const borderColor = host.active
     ? "border-primary/30 glow-sm"
@@ -37,7 +43,7 @@ function HostCard({
 
   return (
     <div
-      className={`glass rounded-xl p-4 flex flex-col gap-2.5 transition-all duration-200 border-l-[3px] ${borderColor} ${
+      className={`surface-panel rounded-xl p-4 flex flex-col gap-2.5 transition-all duration-200 border-l-[3px] ${borderColor} ${
         isOffline ? "opacity-60" : ""
       }`}
     >
@@ -67,10 +73,51 @@ function HostCard({
         </div>
       </div>
 
+      {editingTelemetry && (
+        <div className="grid grid-cols-1 sm:grid-cols-[auto_88px_minmax(140px,1fr)_auto_auto] items-center gap-2 border-t border-border pt-2">
+          <label className="text-xs text-muted-foreground" htmlFor={`telemetry-${host.id}`}>AxiOS port</label>
+          <input
+            id={`telemetry-${host.id}`}
+            value={telemetryPort}
+            onChange={(event) => setTelemetryPort(event.target.value)}
+            className="w-24 rounded-md field-control px-2 py-1 text-xs font-mono"
+          />
+          <input
+            type="password"
+            value={telemetryToken}
+            onChange={(event) => setTelemetryToken(event.target.value)}
+            placeholder={host.has_telemetry_token ? "New token (optional)" : "Telemetry token"}
+            aria-label="Telemetry bearer token"
+            autoComplete="new-password"
+            className="min-w-0 rounded-md field-control px-2 py-1 text-xs font-mono"
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              const port = Number(telemetryPort);
+              if (!Number.isInteger(port) || port < 1 || port > 65535) return;
+              await onTelemetryChange(port, telemetryToken || undefined);
+              setTelemetryToken("");
+              setEditingTelemetry(false);
+            }}
+            className="rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground"
+          >
+            Save
+          </button>
+          <button type="button" onClick={() => setEditingTelemetry(false)} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+        </div>
+      )}
+
       {/* Info */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-[11px] font-mono text-muted-foreground">
           {host.host}:{host.port}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          telemetry :{host.telemetry_port || 3000}
+        </span>
+        <span className={`text-xs ${isLocal || host.has_telemetry_token ? "text-emerald-400" : "text-amber-300"}`}>
+          {isLocal ? "local telemetry" : host.has_telemetry_token ? "authenticated" : "token required"}
         </span>
         <span className="text-[10px] text-muted-foreground">
           {(host.models ?? []).length} model{(host.models ?? []).length !== 1 ? "s" : ""}
@@ -84,6 +131,15 @@ function HostCard({
 
       {/* Actions */}
       <div className="flex items-center gap-2 mt-auto pt-1">
+        {!isLocal && (
+          <button
+            type="button"
+            onClick={() => setEditingTelemetry((current) => !current)}
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-secondary"
+          >
+            Telemetry
+          </button>
+        )}
         {!host.active && host.status === "online" && (
           <button
             onClick={onActivate}
@@ -138,12 +194,14 @@ function AddHostForm({
   onAdd,
   onCancel,
 }: {
-  onAdd: (name: string, host: string, port: number) => Promise<void>;
+  onAdd: (name: string, host: string, port: number, telemetryPort?: number, telemetryToken?: string) => Promise<void>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("11434");
+  const [telemetryPort, setTelemetryPort] = useState("3000");
+  const [telemetryToken, setTelemetryToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -154,13 +212,18 @@ function AddHostForm({
     }
     const portNum = parseInt(port, 10);
     if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-      setFormError("Port must be between 1 and 65535");
+      setFormError("Ollama port must be between 1 and 65535");
+      return;
+    }
+    const telemetryPortNum = parseInt(telemetryPort, 10);
+    if (isNaN(telemetryPortNum) || telemetryPortNum < 1 || telemetryPortNum > 65535) {
+      setFormError("Telemetry port must be between 1 and 65535");
       return;
     }
     setSubmitting(true);
     setFormError(null);
     try {
-      await onAdd(name.trim(), host.trim(), portNum);
+      await onAdd(name.trim(), host.trim(), portNum, telemetryPortNum, telemetryToken.trim());
       toastSuccess("Connected", `${name.trim()} at ${host.trim()}:${portNum}`);
       onCancel();
     } catch (err) {
@@ -173,7 +236,7 @@ function AddHostForm({
   };
 
   return (
-    <div className="glass rounded-xl p-4 border-glow">
+    <div className="surface-panel rounded-xl p-4 border-glow">
       <div className="flex items-center gap-2 mb-3">
         <svg
           width="16"
@@ -194,29 +257,50 @@ function AddHostForm({
         <h4 className="text-sm font-semibold text-foreground">Connect New Host</h4>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Name (e.g. Jetson Nano)"
-          className="px-3 py-2 rounded-lg text-xs glass-subtle text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+          className="px-3 py-2 rounded-lg text-sm field-control placeholder:text-muted-foreground"
         />
         <input
           type="text"
           value={host}
           onChange={(e) => setHost(e.target.value)}
           placeholder="Host/IP (e.g. 192.168.1.50)"
-          className="px-3 py-2 rounded-lg text-xs font-mono glass-subtle text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+          className="px-3 py-2 rounded-lg text-xs font-mono field-control placeholder:text-muted-foreground"
         />
         <input
           type="text"
           value={port}
           onChange={(e) => setPort(e.target.value)}
-          placeholder="Port"
-          className="px-3 py-2 rounded-lg text-xs font-mono glass-subtle text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-24"
+          placeholder="Ollama port"
+          aria-label="Ollama port"
+          className="px-3 py-2 rounded-md text-xs font-mono field-control placeholder:text-muted-foreground"
+        />
+        <input
+          type="text"
+          value={telemetryPort}
+          onChange={(e) => setTelemetryPort(e.target.value)}
+          placeholder="AxiOS telemetry port"
+          aria-label="AxiOS telemetry port"
+          className="px-3 py-2 rounded-md text-xs font-mono field-control placeholder:text-muted-foreground"
+        />
+        <input
+          type="password"
+          value={telemetryToken}
+          onChange={(e) => setTelemetryToken(e.target.value)}
+          placeholder="Telemetry token (optional)"
+          aria-label="Telemetry bearer token"
+          autoComplete="new-password"
+          className="px-3 py-2 rounded-md text-xs font-mono field-control placeholder:text-muted-foreground sm:col-span-2"
         />
       </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Full hardware details require the same token configured on the remote AxiOS telemetry agent.
+      </p>
 
       {formError && (
         <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-[11px] text-destructive mb-3">
@@ -246,7 +330,7 @@ function AddHostForm({
 /* ── Hosts Panel ────────────────────────────────────────── */
 
 export function HostsPanel() {
-  const { hosts, loading, error, addHost, removeHost, activateHost, checkHealth } = useHosts();
+  const { hosts, loading, error, addHost, removeHost, activateHost, updateTelemetryPort, checkHealth } = useHosts();
   const [showAddForm, setShowAddForm] = useState(false);
   const [checking, setChecking] = useState(false);
 
@@ -270,7 +354,7 @@ export function HostsPanel() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[1, 2].map((i) => (
-            <div key={i} className="glass rounded-xl p-4 h-32 animate-pulse" />
+            <div key={i} className="surface-panel rounded-xl p-4 h-32 animate-pulse" />
           ))}
         </div>
       </div>
@@ -357,8 +441,8 @@ export function HostsPanel() {
 
       {/* Host Cards */}
       {hosts.length === 0 ? (
-        <div className="glass rounded-xl p-6 flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 rounded-2xl glass flex items-center justify-center mb-3 glow-primary">
+        <div className="surface-panel rounded-xl p-6 flex flex-col items-center justify-center text-center">
+          <div className="w-12 h-12 rounded-2xl surface-raised flex items-center justify-center mb-3">
             <svg
               width="20"
               height="20"
@@ -389,6 +473,10 @@ export function HostsPanel() {
               host={host}
               onActivate={() => activateHost(host.id).then(() => toastSuccess("Active", host.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Activation failed"))}
               onRemove={() => removeHost(host.id).then(() => toastInfo("Removed", host.name)).catch((err) => toastError("Error", err instanceof Error ? err.message : "Remove failed"))}
+              onTelemetryChange={(port, token) => updateTelemetryPort(host.id, port, token).then(() => toastSuccess("Telemetry updated", `${host.name} uses authenticated port ${port}`)).catch((err) => {
+                toastError("Error", err instanceof Error ? err.message : "Update failed");
+                throw err;
+              })}
             />
           ))}
         </div>

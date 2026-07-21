@@ -54,7 +54,11 @@ type chatLoop struct {
 	fallbacks   []FallbackSpec
 	buildClient func(provider, model string) (chatClient, error)
 	execTool    func(toolName, toolID string, rawInput json.RawMessage) string
+	onComplete  func(provider, model string, usage providers.Usage, duration time.Duration)
 	logger      *slog.Logger
+
+	onToolsUnsupported func(provider, model string)
+	toolsDisabledFor   string
 
 	// sleep and backoffBase are injectable for tests.
 	sleep       func(time.Duration)
@@ -176,9 +180,34 @@ func (cl *chatLoop) complete(ctx context.Context, sink wsSink, msgs []providers.
 			})
 		}
 
-		resp, err := cl.client.Stream(ctx, cl.system, msgs, cl.tools, onDelta)
+		providerName := cl.client.Name()
+		modelName := cl.client.Model()
+		modelKey := chatModelKey(providerName, modelName)
+		tools := cl.tools
+		system := cl.system
+		if cl.toolsDisabledFor == modelKey {
+			tools = nil
+			system += "\n\nTool calling is unavailable for this model. Respond conversationally without attempting to invoke tools."
+		}
+		startedAt := time.Now()
+		resp, err := cl.client.Stream(ctx, system, msgs, tools, onDelta)
 		if err == nil {
+			if cl.onComplete != nil {
+				cl.onComplete(providerName, modelName, resp.Usage, time.Since(startedAt))
+			}
 			return resp, deltaSent, true
+		}
+		if len(tools) > 0 && !deltaSent && isUnsupportedToolsError(err) {
+			cl.toolsDisabledFor = modelKey
+			if cl.onToolsUnsupported != nil {
+				cl.onToolsUnsupported(providerName, modelName)
+			}
+			attempt = 0
+			cl.logger.Warn("model does not support tool calling; retrying in chat-only mode",
+				"provider", providerName,
+				"model", modelName,
+			)
+			continue
 		}
 
 		var ce *providers.ClassifiedError
@@ -209,6 +238,21 @@ func (cl *chatLoop) complete(ctx context.Context, sink wsSink, msgs []providers.
 		})
 		return nil, deltaSent, false
 	}
+}
+
+func chatModelKey(provider, model string) string {
+	return strings.ToLower(provider) + "\x00" + model
+}
+
+func isUnsupportedToolsError(err error) bool {
+	var ce *providers.ClassifiedError
+	if !errors.As(err, &ce) || !strings.EqualFold(ce.Provider, "ollama") {
+		return false
+	}
+	message := strings.ToLower(ce.Message)
+	return strings.Contains(message, "does not support tools") ||
+		strings.Contains(message, "doesn't support tools") ||
+		strings.Contains(message, "tool calling is not supported")
 }
 
 // advanceFallback swaps the client to the next viable entry of the fallback
@@ -274,7 +318,14 @@ func (s *Server) runChatLoop(ctx context.Context, sink wsSink, session *Session,
 		execTool: func(toolName, toolID string, rawInput json.RawMessage) string {
 			return s.executeTool(ctx, sink, toolName, toolID, rawInput)
 		},
-		logger: s.logger,
+		onComplete: s.recordInference,
+		logger:     s.logger,
+		onToolsUnsupported: func(provider, model string) {
+			s.unsupportedToolModels.Store(chatModelKey(provider, model), struct{}{})
+		},
+	}
+	if _, unsupported := s.unsupportedToolModels.Load(chatModelKey(client.Name(), client.Model())); unsupported {
+		loop.toolsDisabledFor = chatModelKey(client.Name(), client.Model())
 	}
 	loop.run(ctx, sink, session)
 }

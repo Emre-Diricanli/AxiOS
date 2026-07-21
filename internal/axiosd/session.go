@@ -74,12 +74,15 @@ type SessionStore struct {
 	logger   *slog.Logger
 }
 
-// NewSessionStore creates a new session store that persists to ~/.axios/sessions.json.
-func NewSessionStore(logger *slog.Logger) *SessionStore {
-	home, _ := os.UserHomeDir()
-	dir := filepath.Join(home, ".axios")
-	os.MkdirAll(dir, 0755)
-	return newSessionStoreAt(filepath.Join(dir, "sessions.json"), logger)
+// NewSessionStore creates a new session store that persists to
+// <dataDir>/sessions.json. An empty dataDir falls back to ~/.axios.
+func NewSessionStore(dataDir string, logger *slog.Logger) *SessionStore {
+	if dataDir == "" {
+		home, _ := os.UserHomeDir()
+		dataDir = filepath.Join(home, ".axios")
+	}
+	os.MkdirAll(dataDir, 0755)
+	return newSessionStoreAt(filepath.Join(dataDir, "sessions.json"), logger)
 }
 
 // newSessionStoreAt creates a session store persisting to an explicit path

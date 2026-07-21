@@ -12,14 +12,22 @@ import (
 // of the shared ollamactl.Model so the REST JSON shape stays unchanged.
 type InstalledModel = ollamactl.Model
 
-// MarketplaceModel represents a model available for download from the Ollama registry.
+// MarketplaceModel represents a model available for installation through Ollama.
 type MarketplaceModel struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Tags        []string `json:"tags"`
-	Category    string   `json:"category"`
-	Parameters  string   `json:"parameters"`
-	Recommended bool     `json:"recommended"`
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	Tags         []string `json:"tags"`
+	Category     string   `json:"category"`
+	Parameters   string   `json:"parameters"`
+	Recommended  bool     `json:"recommended"`
+	Source       string   `json:"source,omitempty"`
+	PullName     string   `json:"pull_name,omitempty"`
+	Author       string   `json:"author,omitempty"`
+	Downloads    int64    `json:"downloads,omitempty"`
+	Likes        int64    `json:"likes,omitempty"`
+	LastModified string   `json:"last_modified,omitempty"`
+	License      string   `json:"license,omitempty"`
+	URL          string   `json:"url,omitempty"`
 }
 
 // PullProgress represents progress of a model pull operation. It is an alias
@@ -209,6 +217,27 @@ func getModelInfo(ollamaURL, modelName string) (*ollamactl.ShowResponse, error) 
 
 // --- HTTP Handlers ---
 
+func (s *Server) modelClientForRequest(r *http.Request) (*OllamaClient, error) {
+	hostID := r.URL.Query().Get("host_id")
+	if hostID == "" {
+		if s.ollama == nil {
+			return nil, fmt.Errorf("Ollama is not configured")
+		}
+		return s.ollama, nil
+	}
+	if s.hostStore == nil {
+		return nil, fmt.Errorf("host management is not configured")
+	}
+	host := s.hostStore.GetHost(hostID)
+	if host == nil {
+		return nil, fmt.Errorf("host %q not found", hostID)
+	}
+	if host.Status != "online" {
+		return nil, fmt.Errorf("host %q is offline", hostID)
+	}
+	return NewOllamaClient(host.Host, host.Port), nil
+}
+
 // handleModelsInstalled returns the list of locally installed models.
 func (s *Server) handleModelsInstalled(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -218,13 +247,14 @@ func (s *Server) handleModelsInstalled(w http.ResponseWriter, r *http.Request) {
 
 	// No reachable Ollama host is a normal state (cloud-only setups) — render
 	// an empty library instead of failing the whole Models page.
-	if s.ollama == nil {
+	client, clientErr := s.modelClientForRequest(r)
+	if clientErr != nil {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"models": []any{}, "warning": "Ollama is not configured"})
+		json.NewEncoder(w).Encode(map[string]any{"models": []any{}, "warning": clientErr.Error()})
 		return
 	}
 
-	models, err := getInstalledModels(s.ollama.BaseURL())
+	models, err := getInstalledModels(client.BaseURL())
 	if err != nil {
 		s.logger.Error("failed to get installed models", "error", err)
 		s.jsonError(w, fmt.Sprintf("Failed to get installed models: %v", err), http.StatusBadGateway)
@@ -246,8 +276,8 @@ func (s *Server) handleModelsMarketplace(w http.ResponseWriter, r *http.Request)
 
 	// If Ollama is connected, mark which models are already installed
 	var installed map[string]bool
-	if s.ollama != nil {
-		installedModels, err := getInstalledModels(s.ollama.BaseURL())
+	if client, err := s.modelClientForRequest(r); err == nil {
+		installedModels, err := getInstalledModels(client.BaseURL())
 		if err == nil {
 			installed = make(map[string]bool, len(installedModels))
 			for _, m := range installedModels {
@@ -263,6 +293,9 @@ func (s *Server) handleModelsMarketplace(w http.ResponseWriter, r *http.Request)
 
 	entries := make([]marketplaceEntry, 0, len(models))
 	for _, m := range models {
+		if m.Source == "" {
+			m.Source = "ollama"
+		}
 		entry := marketplaceEntry{
 			MarketplaceModel: m,
 			Installed:        installed[m.Name],
@@ -281,8 +314,9 @@ func (s *Server) handleModelPull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.ollama == nil {
-		s.jsonError(w, "Ollama is not configured", http.StatusServiceUnavailable)
+	client, err := s.modelClientForRequest(r)
+	if err != nil {
+		s.jsonError(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
@@ -315,8 +349,9 @@ func (s *Server) handleModelPull(w http.ResponseWriter, r *http.Request) {
 
 	// Start the pull in a goroutine
 	errChan := make(chan error, 1)
+	baseURL := client.BaseURL()
 	go func() {
-		errChan <- pullModel(s.ollama.BaseURL(), req.Name, progressChan)
+		errChan <- pullModel(baseURL, req.Name, progressChan)
 	}()
 
 	// Stream progress updates as SSE events
@@ -359,8 +394,9 @@ func (s *Server) handleModelDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.ollama == nil {
-		s.jsonError(w, "Ollama is not configured", http.StatusServiceUnavailable)
+	client, err := s.modelClientForRequest(r)
+	if err != nil {
+		s.jsonError(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
@@ -372,7 +408,7 @@ func (s *Server) handleModelDelete(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Info("deleting model", "name", name)
 
-	if err := deleteModel(s.ollama.BaseURL(), name); err != nil {
+	if err := deleteModel(client.BaseURL(), name); err != nil {
 		s.logger.Error("model delete failed", "name", name, "error", err)
 		s.jsonError(w, fmt.Sprintf("Failed to delete model: %v", err), http.StatusBadGateway)
 		return
@@ -391,8 +427,9 @@ func (s *Server) handleModelInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.ollama == nil {
-		s.jsonError(w, "Ollama is not configured", http.StatusServiceUnavailable)
+	client, err := s.modelClientForRequest(r)
+	if err != nil {
+		s.jsonError(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
@@ -402,7 +439,7 @@ func (s *Server) handleModelInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info, err := getModelInfo(s.ollama.BaseURL(), name)
+	info, err := getModelInfo(client.BaseURL(), name)
 	if err != nil {
 		s.logger.Error("model info failed", "name", name, "error", err)
 		s.jsonError(w, fmt.Sprintf("Failed to get model info: %v", err), http.StatusBadGateway)

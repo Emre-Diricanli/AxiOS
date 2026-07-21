@@ -250,7 +250,7 @@ func TestApprovalRegistryResolveUnknownID(t *testing.T) {
 // them as chat input.
 func TestWebSocketRoutesApprovalResponse(t *testing.T) {
 	s := newPermTestServer(t, &fakeExecutor{})
-	s.sessions = NewSessionStore(testLogger())
+	s.sessions = NewSessionStore(t.TempDir(), testLogger())
 
 	srv := httptest.NewServer(http.HandlerFunc(s.handleWebSocket))
 	defer srv.Close()
