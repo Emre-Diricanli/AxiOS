@@ -63,6 +63,15 @@ type Server struct {
 	metricsMu   sync.RWMutex
 	inference   InferenceMetrics
 
+	// Cached discovery results from the Hugging Face model catalog.
+	modelCatalogClient *http.Client
+	modelCatalogURL    string
+	modelCatalogMu     sync.Mutex
+	modelCatalogCache  map[string]modelCatalogCacheEntry
+
+	// Models that rejected structured tools during this daemon run.
+	unsupportedToolModels sync.Map
+
 	// xAI SuperGrok subscription OAuth (device-code flow), created lazily.
 	xaiOAuthOnce sync.Once
 	xaiOAuthFlow *XAIOAuth
@@ -113,11 +122,12 @@ func (s *Server) inferenceMetrics() InferenceMetrics {
 	return s.inference
 }
 
-// NewServer creates a new axiosd HTTP server.
-func NewServer(router *Router, mcpManager *MCPManager, logger *slog.Logger) *Server {
+// NewServer creates a new axiosd HTTP server. dataDir is the persistent
+// state directory (sessions.json); an empty value falls back to ~/.axios.
+func NewServer(router *Router, mcpManager *MCPManager, dataDir string, logger *slog.Logger) *Server {
 	return &Server{
 		router:     router,
-		sessions:   NewSessionStore(logger),
+		sessions:   NewSessionStore(dataDir, logger),
 		mcpManager: mcpManager,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
@@ -384,6 +394,7 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	// Model marketplace
 	mux.HandleFunc("/api/models/installed", s.handleModelsInstalled)
 	mux.HandleFunc("/api/models/marketplace", s.handleModelsMarketplace)
+	mux.HandleFunc("/api/models/search", s.handleModelsSearch)
 	mux.HandleFunc("/api/models/pull", s.handleModelPull)
 	mux.HandleFunc("/api/models/delete", s.handleModelDelete)
 	mux.HandleFunc("/api/models/info", s.handleModelInfo)
@@ -392,6 +403,7 @@ func (s *Server) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/hosts", s.handleHosts)
 	mux.HandleFunc("/api/hosts/activate", s.handleHostAction)
 	mux.HandleFunc("/api/hosts/health", s.handleHostHealth)
+	mux.HandleFunc("/api/hosts/stats", s.handleHostStats)
 
 	// Cloud provider management
 	mux.HandleFunc("/api/providers", s.handleProviders)
@@ -453,7 +465,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	backend := s.router.Route()
 	status := map[string]any{
 		"backend": string(backend),
-		"routing": string(s.router.mode),
+		"routing": string(s.router.Mode()),
 	}
 	if s.runtime != nil {
 		if provider, model := s.runtime.Current(backend); provider != "" {
@@ -639,7 +651,7 @@ func (s *Server) handleSwitchModel(w http.ResponseWriter, r *http.Request) {
 			s.runtime.Rebuild()
 		}
 		s.router.SetCloudAvailable(true)
-		s.router.mode = RouteCloudOnly
+		s.router.SetMode(RouteCloudOnly)
 		clearChatPin()
 		s.logger.Info("switched to cloud model", "provider", providerID, "model", req.Model)
 	case "local":
@@ -650,7 +662,7 @@ func (s *Server) handleSwitchModel(w http.ResponseWriter, r *http.Request) {
 		if s.runtime != nil {
 			s.runtime.SetLocalModel(req.Model)
 		}
-		s.router.mode = RouteLocalOnly
+		s.router.SetMode(RouteLocalOnly)
 		clearChatPin()
 		s.logger.Info("switched to local model", "model", req.Model)
 	default:

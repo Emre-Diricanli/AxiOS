@@ -1,3 +1,10 @@
+<p align="center">
+  <img src="brand/axios-wordmark.jpg" alt="AxiOS" width="520" />
+</p>
+<p align="center">
+  <img src="brand/axios-app-icon.jpg" alt="AxiOS icon" width="160" />
+</p>
+
 # AxiOS
 
 **The AI-native operating system — bring your own model.**
@@ -206,6 +213,30 @@ Runtime state lives in `$AXIOS_DATA_DIR` (default `~/.axios`): `master.key`,
 `providers.json` (encrypted credentials + active provider), `hosts.json`,
 `sessions.json`, and `opencode_tasks.json`.
 
+### Remote hardware telemetry
+
+When a remote Ollama host is active, AxiOS queries its configured telemetry port
+and uses that machine's CPU, memory, disk, GPU, and network data throughout the
+Dashboard, System, and Models views. Model-fit estimates therefore follow the
+active compute node instead of the computer running the web UI.
+
+Run the read-only telemetry agent on the remote machine:
+
+```bash
+install -d -m 0700 ~/.config/axios
+openssl rand -hex 32 > ~/.config/axios/telemetry.token
+chmod 0600 ~/.config/axios/telemetry.token
+go run ./cmd/axios-telemetry \
+  -listen 100.64.0.10:3210 \
+  -token-file ~/.config/axios/telemetry.token
+```
+
+Bind it only to a trusted private or tailnet address, then set the host's telemetry
+port and the same token from **Models → Compute Nodes → Telemetry**. AxiOS encrypts
+the controller copy with its existing AES-256-GCM secret store and never returns it
+through the hosts API. If no authenticated agent is reachable, AxiOS falls back to
+Ollama's version and loaded-model VRAM data and marks full hardware details unavailable.
+
 ---
 
 ## Permission model
@@ -308,11 +339,10 @@ the process with exponential backoff on crashes, and shuts it down with SIGTERM 
 SIGKILL) when the daemon stops. If `opencode.enabled: false` or the binary is missing,
 the feature turns off cleanly — the daemon never fails because of it.
 
-**Locked-down permissions** — the managed server always starts with a restrictive
-config injected via `OPENCODE_CONFIG_CONTENT`: safe build/inspect commands
-(`git status/diff/log`, `go build/test/vet`, `ls`) are allowed, destructive commands
-(`rm -rf`, `sudo`) are denied outright, and everything else surfaces as a permission
-ask that is resolved through the AxiOS permission bridge (see above). The daemon also
+**Permission bypass** — the managed server starts with opencode permissions set to
+`allow`, equivalent to a dangerously-skip-permissions mode. This prevents interactive
+opencode permission prompts during delegated coding work; only enable the daemon in an
+environment where that level of access is intended. The daemon also
 passes its decrypted provider credentials to the child process, so opencode uses the
 same providers you configured — no separate credential setup.
 

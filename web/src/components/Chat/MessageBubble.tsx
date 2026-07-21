@@ -58,10 +58,10 @@ export function MessageBubble({ role, content, thinking, model, provider }: Mess
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[90%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
+        className={`text-[13px] leading-relaxed ${
           isUser
-            ? "bg-primary text-primary-foreground rounded-br-sm"
-            : "glass rounded-bl-sm"
+            ? "max-w-[90%] rounded-md bg-secondary px-3 py-2 text-foreground"
+            : "w-full py-1 text-foreground/90"
         }`}
       >
         {!isUser && thinking && <ThinkingBlock text={thinking} />}

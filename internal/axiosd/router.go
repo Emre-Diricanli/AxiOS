@@ -1,6 +1,9 @@
 package axiosd
 
-import "log/slog"
+import (
+	"log/slog"
+	"sync"
+)
 
 // RoutingMode determines how requests are routed between AI backends.
 type RoutingMode string
@@ -18,6 +21,7 @@ type Router struct {
 	cloudAvail bool
 	localAvail bool
 	logger     *slog.Logger
+	mu         sync.RWMutex
 }
 
 // NewRouter creates a new model router.
@@ -28,13 +32,31 @@ func NewRouter(mode RoutingMode, logger *slog.Logger) *Router {
 	}
 }
 
+// SetMode updates the routing mode.
+func (r *Router) SetMode(mode RoutingMode) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.mode = mode
+}
+
+// Mode returns the current routing mode.
+func (r *Router) Mode() RoutingMode {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.mode
+}
+
 // SetCloudAvailable updates cloud backend availability.
 func (r *Router) SetCloudAvailable(available bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.cloudAvail = available
 }
 
 // SetLocalAvailable updates local model backend availability.
 func (r *Router) SetLocalAvailable(available bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.localAvail = available
 }
 
@@ -48,6 +70,9 @@ const (
 
 // Route decides which backend should handle a request.
 func (r *Router) Route() Backend {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	switch r.mode {
 	case RouteCloudOnly:
 		return BackendCloud

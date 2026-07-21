@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"sync"
 )
 
 // ToolHandler is a function that handles a tool invocation.
@@ -18,6 +19,10 @@ type Server struct {
 	permissions map[string]string
 	listener    net.Listener
 	logger      *slog.Logger
+
+	mu     sync.Mutex
+	conns  map[net.Conn]struct{}
+	closed bool
 }
 
 // NewServer creates a new MCP server with the given name and version.
@@ -29,6 +34,7 @@ func NewServer(name, version string) *Server {
 		},
 		handlers:    make(map[string]ToolHandler),
 		permissions: make(map[string]string),
+		conns:       make(map[net.Conn]struct{}),
 		logger:      slog.Default().With("server", name),
 	}
 }
@@ -40,7 +46,8 @@ func (s *Server) RegisterTool(def ToolDefinition, handler ToolHandler) {
 	s.permissions[def.Name] = def.Permission
 }
 
-// Serve starts listening on the given Unix socket path.
+// Serve starts listening on the given Unix socket path. It blocks until the
+// listener fails or Close is called (which returns nil from Serve).
 func (s *Server) Serve(socketPath string) error {
 	// Remove stale socket file if it exists
 	os.Remove(socketPath)
@@ -57,10 +64,31 @@ func (s *Server) Serve(socketPath string) error {
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
+			s.mu.Lock()
+			closed := s.closed
+			s.mu.Unlock()
+			if closed {
+				return nil
+			}
 			s.logger.Error("accept failed", "error", err)
 			continue
 		}
-		go s.handleConnection(conn)
+		s.trackConn(conn, true)
+		go func() {
+			defer s.trackConn(conn, false)
+			s.handleConnection(conn)
+		}()
+	}
+}
+
+// trackConn adds or removes a connection from the active set.
+func (s *Server) trackConn(conn net.Conn, add bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if add {
+		s.conns[conn] = struct{}{}
+	} else {
+		delete(s.conns, conn)
 	}
 }
 
@@ -152,8 +180,15 @@ func (s *Server) handleToolCall(req Request) Response {
 	}
 }
 
-// Close stops the server.
+// Close stops the server: the listener and every live connection are closed,
+// so clients see the connection break and Serve returns.
 func (s *Server) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	for conn := range s.conns {
+		conn.Close()
+	}
 	if s.listener != nil {
 		return s.listener.Close()
 	}

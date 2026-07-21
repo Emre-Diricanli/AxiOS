@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useFileSystem } from "@/hooks/useFileSystem";
+import { loadSettings, type AppSettings } from "@/lib/settings";
 import { Breadcrumb } from "./Breadcrumb";
 import { FileIcon } from "./FileIcon";
 import { FilePreview } from "./FilePreview";
@@ -251,7 +252,7 @@ function DeleteConfirmDialog({
   }, [onConfirm, onCancel]);
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center overlay-backdrop">
       <div className="glass rounded-xl p-5 shadow-2xl max-w-sm w-full mx-4">
         <h3 className="text-sm font-medium text-foreground mb-2">Delete &quot;{name}&quot;?</h3>
         <p className="text-xs text-muted-foreground mb-4">
@@ -384,7 +385,7 @@ export function FileExplorer() {
     setShowDotfiles,
   } = useFileSystem("/");
 
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => loadSettings().fileExplorerView);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
@@ -417,6 +418,14 @@ export function FileExplorer() {
 
   // Hidden file input ref for manual file pick
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const applySettings = (event: Event) => {
+      setViewMode((event as CustomEvent<AppSettings>).detail.fileExplorerView);
+    };
+    window.addEventListener("axios-settings-changed", applySettings);
+    return () => window.removeEventListener("axios-settings-changed", applySettings);
+  }, []);
 
   const handleNavigate = useCallback(
     (path: string) => {
@@ -906,10 +915,10 @@ export function FileExplorer() {
 
       {/* ===== Sidebar ===== */}
       {sidebarOpen && (
-        <div className="w-[200px] shrink-0 glass-subtle border-r border-border flex flex-col overflow-y-auto scrollbar-none">
+        <div className="w-[200px] shrink-0 bg-surface border-r border-border flex flex-col overflow-y-auto scrollbar-none">
           {/* Favorites */}
           <div className="px-3 pt-3 pb-1">
-            <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest mb-1">
+            <p className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider mb-1">
               Favorites
             </p>
           </div>
@@ -920,7 +929,7 @@ export function FileExplorer() {
                 <button
                   key={item.id}
                   onClick={() => handleSidebarNav(item.path)}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 ${
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs transition-colors ${
                     active
                       ? "bg-accent text-foreground font-medium"
                       : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
@@ -935,7 +944,7 @@ export function FileExplorer() {
 
           {/* Locations */}
           <div className="px-3 pt-4 pb-1">
-            <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest mb-1">
+            <p className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider mb-1">
               Locations
             </p>
           </div>
@@ -946,7 +955,7 @@ export function FileExplorer() {
                 <button
                   key={item.id}
                   onClick={() => handleSidebarNav(item.path)}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 ${
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs transition-colors ${
                     active
                       ? "bg-accent text-foreground font-medium"
                       : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
@@ -1192,7 +1201,7 @@ export function FileExplorer() {
 
             {/* Error */}
             {error && (
-              <div className="m-4 p-4 rounded-xl bg-destructive/5 border border-destructive/20">
+              <div className="m-4 p-4 rounded-md bg-destructive/5 border border-destructive/20">
                 <p className="text-destructive text-xs">{error}</p>
                 <button
                   onClick={refresh}
@@ -1236,20 +1245,20 @@ export function FileExplorer() {
                       onClick={(e) => handleSelect(entry, e)}
                       onDoubleClick={() => handleOpen(entry)}
                       onContextMenu={(e) => handleContextMenu(e, entry)}
-                      className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all duration-150 group text-center ${
+                      className={`flex flex-col items-center gap-1 p-2 rounded-md transition-colors group text-center ${
                         isSelected
                           ? "border-glow bg-accent/50"
-                          : "border border-transparent hover:bg-secondary hover:scale-[1.02]"
+                          : "border border-transparent hover:bg-secondary"
                       }`}
                     >
-                      <div className="transition-transform duration-150 group-hover:scale-105">
+                      <div>
                         <FileIcon
                           name={entry.name}
                           isDir={entry.type === "dir"}
                           size="lg"
                         />
                       </div>
-                      <span className="text-[11px] text-foreground/80 truncate w-full leading-tight mt-0.5">
+                      <span className="text-xs text-foreground/80 truncate w-full leading-tight mt-0.5">
                         {renderFileName(entry)}
                       </span>
                       {entry.type === "file" && renamingEntry !== entry.name && (
@@ -1267,7 +1276,7 @@ export function FileExplorer() {
             {!loading && !error && filteredEntries.length > 0 && viewMode === "list" && (
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-left text-[10px] text-muted-foreground border-b border-border sticky top-0 bg-background/80 backdrop-blur-sm z-10">
+                  <tr className="text-left text-xs text-muted-foreground border-b border-border sticky top-0 bg-background z-10">
                     <th className="py-2 px-4 font-medium">
                       <button
                         onClick={() => setSort("name")}

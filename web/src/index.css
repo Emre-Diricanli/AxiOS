@@ -7,45 +7,49 @@
 @custom-variant data-vertical (&[data-orientation="vertical"]);
 
 @theme inline {
-  --color-background: #08080c;
-  --color-foreground: #e4e4ec;
-  --color-card: rgba(16, 16, 24, 0.7);
-  --color-card-foreground: #e4e4ec;
-  --color-popover: rgba(16, 16, 24, 0.9);
-  --color-popover-foreground: #e4e4ec;
-  --color-primary: #6366f1;
+  --color-background: #0b0d10;
+  --color-foreground: #e7e9ee;
+  --color-card: #12151a;
+  --color-card-foreground: #e7e9ee;
+  --color-popover: #171b21;
+  --color-popover-foreground: #e7e9ee;
+  --color-primary: #7890f8;
   --color-primary-foreground: #ffffff;
-  --color-secondary: rgba(255, 255, 255, 0.06);
-  --color-secondary-foreground: #c4c4d4;
-  --color-muted: rgba(255, 255, 255, 0.04);
-  --color-muted-foreground: #6b6b80;
-  --color-accent: rgba(99, 102, 241, 0.12);
-  --color-accent-foreground: #c4c4d4;
+  --color-secondary: #181c22;
+  --color-secondary-foreground: #cdd1d8;
+  --color-muted: #15181d;
+  --color-muted-foreground: #8b929e;
+  --color-accent: #1a1f29;
+  --color-accent-foreground: #d8dbe1;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
-  --color-border: rgba(255, 255, 255, 0.07);
-  --color-input: rgba(255, 255, 255, 0.07);
-  --color-ring: #6366f1;
-  --color-chart-1: #6366f1;
+  --color-border: #262b33;
+  --color-input: #262b33;
+  --color-ring: #7890f8;
+  --color-chart-1: #7890f8;
   --color-chart-2: #22c55e;
   --color-chart-3: #f59e0b;
   --color-chart-4: #a855f7;
   --color-chart-5: #ef4444;
-  --color-sidebar: rgba(12, 12, 18, 0.8);
-  --color-sidebar-foreground: #a0a0b4;
-  --color-sidebar-primary: #6366f1;
+  --color-sidebar: #0e1115;
+  --color-sidebar-foreground: #9aa1ad;
+  --color-sidebar-primary: #7890f8;
   --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-accent: rgba(99, 102, 241, 0.15);
-  --color-sidebar-accent-foreground: #e4e4ec;
-  --color-sidebar-border: rgba(255, 255, 255, 0.06);
-  --color-sidebar-ring: #6366f1;
-  --color-glass: rgba(16, 16, 28, 0.6);
-  --color-glass-border: rgba(255, 255, 255, 0.08);
-  --color-glow: rgba(99, 102, 241, 0.4);
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  --color-sidebar-accent: #171c24;
+  --color-sidebar-accent-foreground: #e7e9ee;
+  --color-sidebar-border: #252a31;
+  --color-sidebar-ring: #7890f8;
+  --color-glass: rgba(18, 21, 26, 0.94);
+  --color-glass-border: #2a3039;
+  --color-glow: transparent;
+  --color-workspace: #0d1014;
+  --color-surface: #12151a;
+  --color-surface-raised: #171b21;
+  --color-surface-hover: #1b2027;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
 }
 
 @layer base {
@@ -57,6 +61,11 @@
     color: var(--color-foreground);
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+  }
+  :where(button, a, input, textarea, select, [role="button"]):focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
   }
 }
 
@@ -64,27 +73,63 @@
 @layer utilities {
   .glass {
     background: var(--color-glass);
-    backdrop-filter: blur(20px) saturate(1.4);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--color-glass-border);
   }
   .glass-subtle {
-    background: rgba(16, 16, 28, 0.4);
-    backdrop-filter: blur(12px) saturate(1.2);
-    -webkit-backdrop-filter: blur(12px) saturate(1.2);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(18, 21, 26, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--color-border);
+  }
+  .surface-workspace {
+    background: var(--color-workspace);
+    border: 1px solid var(--color-border);
+  }
+  .surface-panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+  }
+  .surface-raised {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+  }
+  .surface-interactive {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  }
+  .surface-interactive:hover {
+    background: var(--color-surface-hover);
+    border-color: rgba(120, 144, 248, 0.32);
+  }
+  .field-control {
+    background: #0f1216;
+    border: 1px solid var(--color-border);
+    color: var(--color-foreground);
+  }
+  .field-control:focus {
+    border-color: rgba(120, 144, 248, 0.6);
+    box-shadow: 0 0 0 2px rgba(120, 144, 248, 0.12);
+    outline: none;
+  }
+  .overlay-backdrop {
+    background: rgba(4, 4, 8, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
   .glow-primary {
-    box-shadow: 0 0 20px rgba(99, 102, 241, 0.15), 0 0 40px rgba(99, 102, 241, 0.05);
+    box-shadow: none;
   }
   .glow-sm {
-    box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+    box-shadow: none;
   }
   .border-glow {
-    border: 1px solid rgba(99, 102, 241, 0.2);
+    border: 1px solid var(--color-border);
   }
   .text-glow {
-    text-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+    text-shadow: none;
   }
   .scrollbar-none {
     -ms-overflow-style: none;
@@ -92,6 +137,14 @@
   }
   .scrollbar-none::-webkit-scrollbar {
     display: none;
+  }
+  .auth-grid {
+    background-image:
+      linear-gradient(rgba(120, 144, 248, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120, 144, 248, 0.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(circle at 46% 42%, black 0%, transparent 68%);
+    -webkit-mask-image: radial-gradient(circle at 46% 42%, black 0%, transparent 68%);
   }
 }
 
@@ -303,5 +356,32 @@
 
 /* Smooth page transitions for tab content */
 .page-enter {
-  animation: fade-slide-up 0.4s ease-out both;
+  animation: none;
+}
+
+.rounded-2xl { border-radius: 0.625rem; }
+.rounded-xl { border-radius: 0.5rem; }
+.animate-fade-up,
+.animate-fade-down,
+.animate-fade-left,
+.animate-fade-right,
+.animate-scale-in,
+.animate-bounce-in,
+.animate-float,
+.animate-gradient {
+  animation: none !important;
+}
+
+:where(.text-\[9px\], .text-\[10px\], .text-\[11px\]):not(.font-mono) {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

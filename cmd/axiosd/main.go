@@ -159,7 +159,7 @@ func main() {
 	}
 
 	// Start HTTP/WebSocket server
-	server := axiosd.NewServer(router, mcpManager, logger)
+	server := axiosd.NewServer(router, mcpManager, dataDir, logger)
 	server.SetProviderStore(providerStore)
 	if ollamaClient != nil {
 		server.SetOllama(ollamaClient)
@@ -221,6 +221,7 @@ func main() {
 		}
 		logger.Info("Ollama host switched", "url", client.BaseURL())
 	})
+	hostStore.ConfigurePersistence(hostsFilePath, secretsStore)
 
 	// Add the local host from config
 	localHost, err := hostStore.AddHost("Local", cfg.Ollama.Host, cfg.Ollama.Port)

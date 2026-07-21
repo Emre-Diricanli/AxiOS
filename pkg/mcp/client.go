@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -103,12 +104,12 @@ func (c *Client) call(method string, params map[string]any) (*Response, error) {
 	}
 
 	if err := c.encoder.Encode(req); err != nil {
-		return nil, fmt.Errorf("send request: %w", err)
+		return nil, &ConnError{Op: "send request", Err: err}
 	}
 
 	var resp Response
 	if err := c.decoder.Decode(&resp); err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return nil, &ConnError{Op: "read response", Err: err}
 	}
 
 	if resp.Error != nil {
@@ -116,6 +117,24 @@ func (c *Client) call(method string, params map[string]any) (*Response, error) {
 	}
 
 	return &resp, nil
+}
+
+// ConnError marks a connection-level failure (dial, send, receive), as
+// opposed to a protocol-level error returned by the server. It lets callers
+// tell "the server is gone, reconnect" apart from "the server answered with
+// an error".
+type ConnError struct {
+	Op  string
+	Err error
+}
+
+func (e *ConnError) Error() string { return fmt.Sprintf("%s: %v", e.Op, e.Err) }
+func (e *ConnError) Unwrap() error { return e.Err }
+
+// IsConnError reports whether err is a connection-level failure.
+func IsConnError(err error) bool {
+	var ce *ConnError
+	return errors.As(err, &ce)
 }
 
 // Close closes the connection to the MCP server.

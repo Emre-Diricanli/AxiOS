@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useModelDownloads } from "@/contexts/ModelDownloadContext";
 import type { InstalledModel, MarketplaceModel, PullProgress } from "@/types/models";
 
 interface UseModelMarketplaceReturn {
@@ -10,116 +11,124 @@ interface UseModelMarketplaceReturn {
   pullModel: (name: string) => void;
   deleteModel: (name: string) => Promise<void>;
   refreshInstalled: () => Promise<void>;
+  refreshAll: () => Promise<void>;
   isInstalled: (name: string) => boolean;
 }
 
-export function useModelMarketplace(): UseModelMarketplaceReturn {
+interface UseHuggingFaceModelsReturn {
+  models: MarketplaceModel[];
+  loading: boolean;
+  error: string | null;
+}
+
+export function useHuggingFaceModels(query: string | null): UseHuggingFaceModelsReturn {
+  const [models, setModels] = useState<MarketplaceModel[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (query === null) {
+      setModels([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({ limit: "24" });
+        if (query.trim()) params.set("q", query.trim());
+        const response = await fetch(`/api/models/search?${params}`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        setModels(data.models ?? []);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setError(err instanceof Error ? err.message : "Failed to search Hugging Face");
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, query.trim() ? 350 : 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
+
+  return { models, loading, error };
+}
+
+export function useModelMarketplace(hostId?: string, hostName?: string): UseModelMarketplaceReturn {
   const [installed, setInstalled] = useState<InstalledModel[]>([]);
   const [marketplace, setMarketplace] = useState<MarketplaceModel[]>([]);
-  const [pulling, setPulling] = useState<Map<string, PullProgress>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const initialFetchDone = useRef(false);
+  const { downloads, completionVersion, startDownload } = useModelDownloads();
+  const hostQuery = hostId ? `host_id=${encodeURIComponent(hostId)}` : "";
+  const withHost = (path: string) => hostQuery ? `${path}${path.includes("?") ? "&" : "?"}${hostQuery}` : path;
 
   const fetchInstalled = useCallback(async () => {
     try {
-      const res = await fetch("/api/models/installed");
+      const res = await fetch(withHost("/api/models/installed"));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setInstalled(data.models ?? data ?? []);
-      setError(null);
+      setError(data.warning ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch installed models");
     }
-  }, []);
+  }, [hostId]);
 
   const fetchMarketplace = useCallback(async () => {
     try {
-      const res = await fetch("/api/models/marketplace");
+      const res = await fetch(withHost("/api/models/marketplace"));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setMarketplace(data.models ?? data ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch marketplace");
     }
-  }, []);
+  }, [hostId]);
 
   useEffect(() => {
-    if (!initialFetchDone.current) {
-      initialFetchDone.current = true;
-      setLoading(true);
-      Promise.all([fetchInstalled(), fetchMarketplace()]).finally(() => {
-        setLoading(false);
-      });
-    }
+    setLoading(true);
+    setInstalled([]);
+    Promise.all([fetchInstalled(), fetchMarketplace()]).finally(() => setLoading(false));
   }, [fetchInstalled, fetchMarketplace]);
+
+  useEffect(() => {
+    if (completionVersion > 0) void fetchInstalled();
+  }, [completionVersion, fetchInstalled]);
 
   const refreshInstalled = useCallback(async () => {
     await fetchInstalled();
   }, [fetchInstalled]);
 
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchInstalled(), fetchMarketplace()]);
+  }, [fetchInstalled, fetchMarketplace]);
+
   const pullModel = useCallback(
     (name: string) => {
-      setPulling((prev) => {
-        const next = new Map(prev);
-        next.set(name, { status: "starting", percent: 0 });
-        return next;
-      });
-
-      const eventSource = new EventSource(
-        `/api/models/pull?name=${encodeURIComponent(name)}`
-      );
-
-      // Also fire a POST to initiate the pull (the SSE connection reads progress)
-      fetch("/api/models/pull", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      }).catch(() => {
-        // The EventSource approach or POST approach — try both patterns
-      });
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data) as PullProgress;
-          setPulling((prev) => {
-            const next = new Map(prev);
-            next.set(name, data);
-            return next;
-          });
-
-          if (data.status === "success" || data.status === "done" || data.percent >= 100) {
-            eventSource.close();
-            setPulling((prev) => {
-              const next = new Map(prev);
-              next.delete(name);
-              return next;
-            });
-            fetchInstalled();
-          }
-        } catch {
-          // ignore parse errors
-        }
-      };
-
-      eventSource.onerror = () => {
-        eventSource.close();
-        // Check if pull was actually successful by refreshing
-        setPulling((prev) => {
-          const next = new Map(prev);
-          next.delete(name);
-          return next;
-        });
-        fetchInstalled();
-      };
+      startDownload(name, hostId, hostName);
     },
-    [fetchInstalled]
+    [hostId, hostName, startDownload]
   );
+
+  const pulling = useMemo(() => new Map(
+    downloads
+      .filter((download) => download.hostId === hostId && (download.state === "starting" || download.state === "downloading"))
+      .map((download) => [download.name, download.progress])
+  ), [downloads, hostId]);
 
   const deleteModel = useCallback(
     async (name: string) => {
       const res = await fetch(
-        `/api/models/delete?name=${encodeURIComponent(name)}`,
+        withHost(`/api/models/delete?name=${encodeURIComponent(name)}`),
         { method: "DELETE" }
       );
       if (!res.ok) throw new Error(`Delete failed: HTTP ${res.status}`);
@@ -145,6 +154,7 @@ export function useModelMarketplace(): UseModelMarketplaceReturn {
     pullModel,
     deleteModel,
     refreshInstalled,
+    refreshAll,
     isInstalled,
   };
 }

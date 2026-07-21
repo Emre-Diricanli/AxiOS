@@ -5,9 +5,10 @@ interface UseHostsReturn {
   hosts: OllamaHost[];
   loading: boolean;
   error: string | null;
-  addHost: (name: string, host: string, port: number) => Promise<void>;
+  addHost: (name: string, host: string, port: number, telemetryPort?: number, telemetryToken?: string) => Promise<void>;
   removeHost: (id: string) => Promise<void>;
   activateHost: (id: string) => Promise<void>;
+  updateTelemetryPort: (id: string, port: number, token?: string) => Promise<void>;
   checkHealth: () => Promise<void>;
   refreshHosts: () => Promise<void>;
 }
@@ -52,12 +53,12 @@ export function useHosts(): UseHostsReturn {
   }, [fetchHosts]);
 
   const addHost = useCallback(
-    async (name: string, host: string, port: number) => {
+    async (name: string, host: string, port: number, telemetryPort = 3000, telemetryToken = "") => {
       try {
         const res = await fetch("/api/hosts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, host, port }),
+          body: JSON.stringify({ name, host, port, telemetry_port: telemetryPort, telemetry_token: telemetryToken }),
         });
         if (!res.ok) throw new Error(`Failed to add host: HTTP ${res.status}`);
         await fetchHosts();
@@ -95,6 +96,7 @@ export function useHosts(): UseHostsReturn {
         });
         if (!res.ok) throw new Error(`Failed to activate host: HTTP ${res.status}`);
         await fetchHosts();
+        window.dispatchEvent(new CustomEvent("axios-host-changed", { detail: { id } }));
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to activate host";
         setError(msg);
@@ -115,6 +117,19 @@ export function useHosts(): UseHostsReturn {
     }
   }, [fetchHosts]);
 
+  const updateTelemetryPort = useCallback(async (id: string, port: number, token?: string) => {
+    const payload: { id: string; telemetry_port: number; telemetry_token?: string } = { id, telemetry_port: port };
+    if (token !== undefined) payload.telemetry_token = token;
+    const res = await fetch("/api/hosts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`Failed to update telemetry port: HTTP ${res.status}`);
+    await fetchHosts();
+    window.dispatchEvent(new CustomEvent("axios-host-changed", { detail: { id } }));
+  }, [fetchHosts]);
+
   return {
     hosts,
     loading,
@@ -122,6 +137,7 @@ export function useHosts(): UseHostsReturn {
     addHost,
     removeHost,
     activateHost,
+    updateTelemetryPort,
     checkHealth,
     refreshHosts,
   };
